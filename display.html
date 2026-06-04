@@ -46,7 +46,7 @@
   .screen {
     position:absolute; inset:0; display:flex; flex-direction:column;
     align-items:center; justify-content:center; background:rgba(5,5,8,0.92);
-    z-index:10; transition:opacity 0.3s;
+    z-index:10; transition:opacity 0.3s; overflow:auto;
   }
   .screen.hidden { display:none; }
   .screen h1 { font-size:2.8rem; color:#00e676; text-shadow:0 0 30px rgba(0,230,118,0.4); margin-bottom:6px; text-align:center; }
@@ -130,38 +130,41 @@
   <div id="chaosBanner"></div>
 
   <div id="startScreen" class="screen">
-    <h1>ATMI WORKSHOP<br>OVERDRIVE</h1>
-    <div class="sub">Bengkel Otomasi Politeknik Industri ATMI Cikarang<br>Scan QR di HP untuk join sebagai operator!</div>
+    <div style="display:flex; flex-direction:row; align-items:flex-start; justify-content:center; gap:20px; max-width:900px; width:95%; padding:20px;">
+      <!-- LEFT: Title, Mode, Slots, Button -->
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center; min-width:280px;">
+        <h1 style="font-size:2.2rem; margin-bottom:4px;">ATMI WORKSHOP<br>OVERDRIVE</h1>
+        <div class="sub" style="font-size:0.85rem; margin-bottom:12px;">Bengkel Otomasi Politeknik Industri ATMI<br>Scan QR di HP untuk join!</div>
 
-    <!-- Mode Selection -->
-    <div id="modeSelect" style="margin-bottom:14px; display:flex; flex-wrap:wrap; justify-content:center; gap:8px; max-width:520px; width:90%;">
-      <div class="mode-btn active" data-mode="coop" onclick="game.setMode('coop')">🤝 Co-op</div>
-      <div class="mode-btn" data-mode="ffa" onclick="game.setMode('ffa')">👤 Free-for-All</div>
-      <div class="mode-btn" data-mode="1v1" onclick="game.setMode('1v1')">⚔️ 1 vs 1</div>
-      <div class="mode-btn" data-mode="2v2" onclick="game.setMode('2v2')">🟢🟢 vs 🔵🔵 2v2</div>
-    </div>
-    <div id="modeDesc" style="font-size:0.7rem; color:#888; margin-bottom:12px; text-align:center;">Kerja sama, skor bersama</div>
+        <!-- Mode Selection -->
+        <div id="modeSelect" style="margin-bottom:8px; display:flex; flex-wrap:wrap; justify-content:center; gap:6px; width:100%;">
+          <div class="mode-btn active" data-mode="coop" onclick="game.setMode('coop')">🤝 Co-op</div>
+          <div class="mode-btn" data-mode="ffa" onclick="game.setMode('ffa')">👤 FFA</div>
+          <div class="mode-btn" data-mode="1v1" onclick="game.setMode('1v1')">⚔️ 1v1</div>
+          <div class="mode-btn" data-mode="2v2" onclick="game.setMode('2v2')">2v2</div>
+        </div>
+        <div id="modeDesc" style="font-size:0.65rem; color:#888; margin-bottom:10px; text-align:center;">Kerja sama, skor bersama</div>
 
-    <div id="tutorial" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:14px 18px; max-width:520px; width:90%; margin-bottom:16px; text-align:left; font-size:0.78rem; color:#bbb; line-height:1.6;">
-      <div style="color:#00e676; font-weight:700; font-size:0.85rem; margin-bottom:8px; text-align:center;">📖 CARA MAIN</div>
-      <div style="margin-bottom:6px;"><strong style="color:#fff;">🎯 Tujuan:</strong> Selesaikan order sebelum waktu habis (90 detik). Order muncul di atas layar.</div>
-      <div style="margin-bottom:6px;"><strong style="color:#fff;">🎮 Kontrol HP:</strong> 🕹️ <strong>Analog Kiri</strong> (geser untuk gerak) | 🟢 <strong>AKSI</strong> (tahan untuk proses) | 🔴 <strong>BUANG</strong></div>
-      <div style="margin-bottom:6px;"><strong style="color:#fff;">📦 Alur Kerja:</strong></div>
-      <div style="padding-left:12px; margin-bottom:4px;">1. Ambil <strong>⛏️ Bahan Baku</strong> di Raw Depot</div>
-      <div style="padding-left:12px; margin-bottom:4px;">2. Proses di stasiun sesuai order (tahan tombol <strong>AKSI</strong>)</div>
-      <div style="padding-left:12px; margin-bottom:4px;">3. Kirim ke <strong>📦 QC & Shipping</strong> (tahan <strong>AKSI</strong> untuk inspeksi)</div>
-      <div style="margin-top:8px; border-top:1px solid rgba(255,255,255,0.06); padding-top:8px;">
-        <strong style="color:#fff;">🏭 Resep:</strong><br>
-        ⚙️ <strong>Gear Box</strong> = ⛏️ → 🔧 CNC → 📦<br>
-        🦾 <strong>Robot Arm</strong> = ⛏️ → 🔧 CNC → 🤖 Assembly → 📦<br>
-        📡 <strong>Sensor</strong> = ⛏️ → 💻 Programming → 🤖 Assembly → 📦<br>
-        💾 <strong>Control Chip</strong> = ⛏️ → 💻 Programming → 📦
+        <div id="playerSlots" style="margin-bottom:10px;"></div>
+        <button class="btn" id="btnStart" disabled style="padding:12px 36px; font-size:1rem;">MULAI SHIFT</button>
       </div>
-      <div style="margin-top:8px; color:#ff5252; font-size:0.7rem;">🔥 Awas chaos! Mesin bisa overheat & listrik bisa mati sewaktu-waktu!</div>
-    </div>
 
-    <div id="playerSlots"></div>
-    <button class="btn" id="btnStart" disabled>MULAI SHIFT</button>
+      <!-- RIGHT: Tutorial -->
+      <div id="tutorial" style="flex:1; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px 14px; min-width:260px; text-align:left; font-size:0.72rem; color:#bbb; line-height:1.5; max-height:420px; overflow-y:auto;">
+        <div style="color:#00e676; font-weight:700; font-size:0.8rem; margin-bottom:6px; text-align:center;">📖 CARA MAIN</div>
+        <div style="margin-bottom:4px;"><strong style="color:#fff;">🎯 Tujuan:</strong> Selesaikan order sebelum waktu habis.</div>
+        <div style="margin-bottom:4px;"><strong style="color:#fff;">🎮 Kontrol:</strong> 🕹️ Analog = Gerak | 🟢 AKSI = Proses | 🔴 BUANG</div>
+        <div style="margin-bottom:4px;"><strong style="color:#fff;">📦 Alur:</strong> ⛏️ Raw → Proses → 📦 QC</div>
+        <div style="margin-top:6px; border-top:1px solid rgba(255,255,255,0.06); padding-top:6px;">
+          <strong style="color:#fff;">🏭 Resep:</strong><br>
+          ⚙️ Gear Box = ⛏️ → 🔧 → 📦<br>
+          🦾 Robot Arm = ⛏️ → 🔧 → 🤖 → 📦<br>
+          📡 Sensor = ⛏️ → 💻 → 🤖 → 📦<br>
+          💾 Control Chip = ⛏️ → 💻 → 📦
+        </div>
+        <div style="margin-top:6px; color:#ff5252; font-size:0.65rem;">🔥 Awas chaos! Mesin overheat & listrik mati!</div>
+      </div>
+    </div>
   </div>
 
   <div id="gameOverScreen" class="screen hidden">
