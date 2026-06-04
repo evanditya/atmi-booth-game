@@ -60,6 +60,12 @@ wss.on('connection', (ws, req) => {
   if (url.startsWith('/ws/display')) {
     console.log('[SERVER] Display connected');
     displaySocket = ws;
+    // Send existing controllers to the newly connected display
+    controllers.forEach((info) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'player_join', playerId: info.id, color: info.color, name: info.name }));
+      }
+    });
     ws.on('message', (raw) => {
       try {
         const msg = JSON.parse(raw);

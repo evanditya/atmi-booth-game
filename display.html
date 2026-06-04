@@ -92,6 +92,18 @@
     text-shadow:0 0 20px rgba(255,82,82,0.5); text-align:center;
   }
   #chaosBanner.show { opacity:1; }
+
+  /* Recipe Guide */
+  #recipeGuide {
+    position:absolute; bottom:12px; left:12px; z-index:5;
+    background:rgba(10,12,18,0.92); border:1px solid rgba(255,255,255,0.1);
+    border-radius:10px; padding:10px 14px; pointer-events:none;
+    font-size:0.7rem; color:#aaa; max-width:260px;
+  }
+  #recipeGuide h4 { color:#00e676; font-size:0.7rem; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px; }
+  .recipe-line { display:flex; align-items:center; gap:4px; margin:3px 0; }
+  .recipe-arrow { color:#666; font-size:0.65rem; }
+  .recipe-res { font-weight:700; color:#fff; min-width:90px; }
 </style>
 </head>
 <body>
@@ -111,7 +123,7 @@
     <h1>ATMI WORKSHOP<br>OVERDRIVE</h1>
     <div class="sub">Bengkel Otomasi Politeknik Industri ATMI Cikarang<br>Scan QR di HP untuk join sebagai operator!</div>
     <div id="playerSlots"></div>
-    <button class="btn" id="btnStart" onclick="game.startRound()" disabled>MULAI SHIFT</button>
+    <button class="btn" id="btnStart" disabled>MULAI SHIFT</button>
   </div>
 
   <div id="gameOverScreen" class="screen hidden">
@@ -120,6 +132,14 @@
     <div class="sub" id="finalRank" style="margin-bottom:20px;">Trainee</div>
     <div id="leaderboard"></div>
     <button class="btn" onclick="game.resetToLobby()" style="margin-top:20px;">SHIFT BARU</button>
+  </div>
+
+  <div id="recipeGuide" style="display:none;">
+    <h4>📖 Resep Produksi</h4>
+    <div class="recipe-line"><span class="recipe-res">⚙️ Gear Box</span><span class="recipe-arrow">➜</span>⛏️ ➜ 🔧 ➜ 📦</div>
+    <div class="recipe-line"><span class="recipe-res">🦾 Robot Arm</span><span class="recipe-arrow">➜</span>⛏️ ➜ 🔧 ➜ 🤖 ➜ 📦</div>
+    <div class="recipe-line"><span class="recipe-res">📡 Sensor</span><span class="recipe-arrow">➜</span>💻 ➜ 🤖 ➜ 📦</div>
+    <div class="recipe-line"><span class="recipe-res">💾 Control Chip</span><span class="recipe-arrow">➜</span>💻 ➜ 📦</div>
   </div>
 
   <div id="connIndicator"><div id="connDot"></div><span id="connText">Menunggu server...</span></div>
@@ -199,10 +219,10 @@ const STATIONS = [
 ];
 
 const RECIPES = {
-  'Gear Box':       { steps:['cnc','qc'],                    icon:'⚙️', time:25 },
-  'Robot Arm':      { steps:['cnc','assembly','qc'],         icon:'🦾', time:35 },
-  'Sensor Module':  { steps:['program','assembly','qc'],     icon:'📡', time:30 },
-  'Conveyor Belt':  { steps:['cnc','program','assembly','qc'], icon:'🔄', time:40 },
+  'Gear Box':       { steps:['cnc','qc'],                req:'machined', icon:'⚙️', time:25 },
+  'Robot Arm':      { steps:['cnc','assembly','qc'],     req:'robot',    icon:'🦾', time:35 },
+  'Sensor Module':  { steps:['program','assembly','qc'], req:'sensor',   icon:'📡', time:30 },
+  'Control Chip':   { steps:['program','qc'],            req:'chip',     icon:'💾', time:20 },
 };
 
 const ITEMS = {
@@ -305,6 +325,7 @@ const Game = {
     document.getElementById('gameOverScreen').classList.add('hidden');
     document.getElementById('hud').style.display = 'flex';
     document.getElementById('ordersBar').style.display = 'flex';
+    document.getElementById('recipeGuide').style.display = 'block';
     this.lastTime = performance.now();
   },
 
@@ -314,6 +335,7 @@ const Game = {
     document.getElementById('startScreen').classList.remove('hidden');
     document.getElementById('hud').style.display = 'none';
     document.getElementById('ordersBar').style.display = 'none';
+    document.getElementById('recipeGuide').style.display = 'none';
     this.updateLobby();
   },
 
@@ -411,7 +433,7 @@ const Game = {
 
     // QC: deliver finished product
     if (s.id === 'qc') {
-      if (w.item && ['gear','robot','sensor','conveyor'].includes(w.item)) {
+      if (w.item && ['machined','robot','sensor','chip'].includes(w.item)) {
         this.deliverOrder(w.item, w);
         w.item = null;
         sendToController(w.id, { type:'item_update', icon:'📭', text:'Tangan kosong' });
@@ -504,7 +526,7 @@ const Game = {
       const name = names[Math.floor(Math.random()*names.length)];
       const rec = RECIPES[name];
       this.orders.push({
-        name, req: name==='Gear Box'?'gear':name==='Robot Arm'?'robot':name==='Sensor Module'?'sensor':'conveyor',
+        name, req: rec.req,
         icon: rec.icon, timeTotal: rec.time, timeLeft: rec.time, completed: false
       });
       this.spawnTimer = Math.max(4, 10 - this.difficulty * 1.5);
@@ -596,8 +618,17 @@ const Game = {
       const pct = Math.max(0, o.timeLeft / o.timeTotal);
       const danger = pct < 0.3 && !o.completed;
       const cls = o.rush ? 'active' : (danger ? 'danger' : '');
+      const rec = RECIPES[o.name.replace(' [RUSH]','')];
+      const steps = rec ? rec.steps.map(s => {
+        if (s==='cnc') return '🔧';
+        if (s==='assembly') return '🤖';
+        if (s==='program') return '💻';
+        if (s==='qc') return '📦';
+        return s;
+      }).join(' ➜ ') : '';
       return `<div class="order-card ${cls}">
         <div class="order-name">${o.icon} ${o.name}</div>
+        <div class="order-recipe">⛏️ ➜ ${steps}</div>
         <div class="order-timer ${danger?'low':''}">${Math.max(0,Math.ceil(o.timeLeft))}s</div>
       </div>`;
     }).join('');
@@ -607,6 +638,7 @@ const Game = {
     this.state = 'gameover';
     document.getElementById('hud').style.display = 'none';
     document.getElementById('ordersBar').style.display = 'none';
+    document.getElementById('recipeGuide').style.display = 'none';
     document.getElementById('gameOverScreen').classList.remove('hidden');
     document.getElementById('finalScore').textContent = this.score;
 
@@ -641,19 +673,19 @@ const Game = {
   /* -------------------------------------------------------
      Particles
      ------------------------------------------------------- */
-  fxPoof(x,y,color) { this.spawnParticles(x,y,color,12); }
-  fxPickup(x,y) { this.spawnParticles(x,y,'#fff',8); }
+  fxPoof(x,y,color) { this.spawnParticles(x,y,color,12); },
+  fxPickup(x,y) { this.spawnParticles(x,y,'#fff',8); },
   fxConfetti(x,y) {
     for (let i=0;i<30;i++) {
       const hue = Math.random()*360;
       this.particles.push({x,y,vx:(Math.random()-0.5)*10,vy:(Math.random()-0.5)*10-4,life:1,decay:0.02,color:`hsl(${hue},80%,60%)`,size:Math.random()*4+2});
     }
-  }
+  },
   spawnParticles(x,y,color,count) {
     for (let i=0;i<count;i++) {
       this.particles.push({x,y,vx:(Math.random()-0.5)*7,vy:(Math.random()-0.5)*7,life:1,decay:Math.random()*0.04+0.02,color,size:Math.random()*3+1.5});
     }
-  }
+  },
   updateParticles(dt) {
     for (let i=this.particles.length-1;i>=0;i--) {
       const p=this.particles[i]; p.x+=p.vx; p.y+=p.vy; p.life-=p.decay; if(p.life<=0) this.particles.splice(i,1);
@@ -682,6 +714,7 @@ const Game = {
     this.drawItems();
     this.drawWorkers();
     this.drawParticles();
+    this.drawHints();
     this.drawOverlays();
 
     ctx.restore();
@@ -834,6 +867,36 @@ const Game = {
     ctx.globalAlpha = 1; ctx.shadowBlur = 0;
   },
 
+  drawHints() {
+    if (this.state !== 'playing') return;
+    for (const w of this.workers) {
+      if (!w.active || w.interacting) continue;
+      const s = this.getStationAt(w.x, w.y);
+      if (!s) continue;
+      let hint = null;
+      let color = '#fff';
+
+      if (s.id === 'raw' && !w.item) { hint = 'Ambil Bahan'; color = '#8d6e63'; }
+      else if (s.id === 'trash' && w.item) { hint = 'Buang'; color = '#ff5252'; }
+      else if (s.id === 'breaker' && this.powerOutage) { hint = 'Reset Listrik!'; color = '#aa00ff'; }
+      else if (s.id === 'cnc' && !this.powerOutage && this.overheatStation !== 'cnc' && w.item === 'raw') { hint = 'Potong (Tahan AKSI)'; color = '#00c853'; }
+      else if (s.id === 'cnc' && this.overheatStation === 'cnc') { hint = 'Dinginkan Dulu!'; color = '#ff5252'; }
+      else if (s.id === 'program' && !this.powerOutage && !w.item) { hint = 'Program (Tahan AKSI)'; color = '#00b0ff'; }
+      else if (s.id === 'assembly' && !this.powerOutage && (w.item === 'machined' || w.item === 'chip')) { hint = 'Rakit (Tahan AKSI)'; color = '#448aff'; }
+      else if (s.id === 'qc' && w.item && ['machined','robot','sensor','chip'].includes(w.item)) { hint = 'Kirim Order!'; color = '#ffb300'; }
+      else if (s.id === 'qc' && w.item) { hint = 'Salah Item!'; color = '#ff5252'; }
+
+      if (hint) {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.beginPath(); ctx.roundRect(w.x - 55, w.y - 58, 110, 18, 4); ctx.fill();
+        ctx.fillStyle = color;
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(hint, w.x, w.y - 46);
+      }
+    }
+  },
+
   drawOverlays() {
     // Power outage vignette
     if (this.powerOutage) {
@@ -854,8 +917,10 @@ const Game = {
   }
 };
 
-const game = Game;
-game.init();
+window.game = Game;
+window.game.init();
+
+document.getElementById('btnStart').addEventListener('click', () => window.game.startRound());
 </script>
 </body>
 </html>
