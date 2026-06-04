@@ -521,9 +521,10 @@ const Game = {
   },
 
   deliverOrder(itemKey, w) {
-    const order = this.orders.find(o => o.req === itemKey && !o.completed);
-    if (order) {
-      order.completed = true;
+    const idx = this.orders.findIndex(o => o.req === itemKey && !o.completed);
+    if (idx >= 0) {
+      const order = this.orders[idx];
+      this.orders.splice(idx, 1);
       this.combo++;
       this.multiplier = 1 + Math.floor(this.combo / 3);
       const bonus = Math.ceil(order.timeLeft / 5) * 10;
