@@ -431,13 +431,13 @@ const Game = {
       return;
     }
 
-    // QC: deliver finished product
+    // QC: inspect then deliver
     if (s.id === 'qc') {
       if (w.item && ['machined','robot','sensor','chip'].includes(w.item)) {
-        this.deliverOrder(w.item, w);
-        w.item = null;
-        sendToController(w.id, { type:'item_update', icon:'📭', text:'Tangan kosong' });
-        this.fxPoof(w.x, w.y, '#ffb300');
+        if (!w.interacting) {
+          w.interacting = 'qc_inspect'; w.interactTimer = 0; w.interactMax = 1.5;
+        }
+        return;
       } else if (w.item) {
         // Wrong item delivered
         this.score = Math.max(0, this.score - 30);
@@ -482,6 +482,13 @@ const Game = {
       else if (w.item === 'chip') { w.item = 'sensor'; }
       this.fxPoof(w.x, w.y, '#448aff');
       sendToController(w.id, { type:'item_update', icon:ITEMS[w.item].icon, text:ITEMS[w.item].name });
+    }
+
+    if (w.interacting === 'qc_inspect') {
+      this.deliverOrder(w.item, w);
+      w.item = null;
+      sendToController(w.id, { type:'item_update', icon:'📭', text:'Tangan kosong' });
+      this.fxPoof(w.x, w.y, '#ffb300');
     }
 
     w.interacting = null; w.interactTimer = 0;
@@ -883,7 +890,8 @@ const Game = {
       else if (s.id === 'cnc' && this.overheatStation === 'cnc') { hint = 'Dinginkan Dulu!'; color = '#ff5252'; }
       else if (s.id === 'program' && !this.powerOutage && !w.item) { hint = 'Program (Tahan AKSI)'; color = '#00b0ff'; }
       else if (s.id === 'assembly' && !this.powerOutage && (w.item === 'machined' || w.item === 'chip')) { hint = 'Rakit (Tahan AKSI)'; color = '#448aff'; }
-      else if (s.id === 'qc' && w.item && ['machined','robot','sensor','chip'].includes(w.item)) { hint = 'Kirim Order!'; color = '#ffb300'; }
+      else if (s.id === 'qc' && w.item && ['machined','robot','sensor','chip'].includes(w.item) && !w.interacting) { hint = 'Inspeksi (Tahan AKSI)'; color = '#ffb300'; }
+      else if (s.id === 'qc' && w.interacting === 'qc_inspect') { hint = 'Mengecek...'; color = '#ffb300'; }
       else if (s.id === 'qc' && w.item) { hint = 'Salah Item!'; color = '#ff5252'; }
 
       if (hint) {
