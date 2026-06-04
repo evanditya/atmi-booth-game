@@ -866,33 +866,87 @@ const Game = {
 
   drawCNC(s, d) {
     const c = s.color; // #00c853
-    // Machine base platform
-    this.draw3DBox(s.x, s.y + s.h - 30, s.w, 30, d, '#333', false);
-    // Main machine body (left side)
-    this.draw3DBox(s.x + 10, s.y + 20, 100, s.h - 50, d + 4, '#444');
-    // Control panel screen
-    ctx.fillStyle = '#00e676';
-    ctx.fillRect(s.x + 18, s.y + 35, 30, 22);
+    const bx = s.x, by = s.y;
+    const bw = s.w, bh = s.h;
+
+    // === MACHINE BASE (wide platform) ===
+    this.draw3DBox(bx + 10, by + bh - 25, bw - 20, 25, d + 2, '#2a2a2a', false);
+
+    // === TALL VERTICAL COLUMN (left rear) ===
+    this.draw3DBox(bx + 15, by + 10, 90, bh - 35, d + 8, '#3a3a3a');
+    // Column accent stripe
+    ctx.fillStyle = c + '40';
+    ctx.fillRect(bx + 20, by + 15, 6, bh - 45);
+
+    // === CONTROL PANEL ARM (pivots from column) ===
+    // Arm
+    ctx.fillStyle = '#444';
+    ctx.fillRect(bx + 40, by + 45, 55, 8);
+    // Panel housing
+    this.draw3DBox(bx + 90, by + 32, 38, 35, d + 3, '#333');
+    // Screen (glowing)
     ctx.fillStyle = '#000';
-    ctx.fillRect(s.x + 20, s.y + 37, 26, 18);
-    ctx.fillStyle = '#00e676';
-    ctx.font = '8px monospace';
+    ctx.fillRect(bx + 94, by + 36, 30, 22);
+    ctx.fillStyle = c;
+    ctx.font = '7px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('CNC', s.x + 33, s.y + 50);
-    // Spindle head
-    this.draw3DBox(s.x + 70, s.y + 10, 30, 25, d + 6, '#555');
-    // Cutting bed / work area (right side)
-    this.draw3DBox(s.x + 120, s.y + 60, 80, s.h - 90, d, c);
-    // Workpiece on bed
+    ctx.fillText('G01', bx + 109, by + 48);
+    ctx.fillText('X0 Y0', bx + 109, by + 56);
+    // Buttons below screen
     ctx.fillStyle = '#666';
-    ctx.fillRect(s.x + 135, s.y + 55, 50, 8);
-    ctx.fillStyle = '#888';
-    ctx.fillRect(s.x + 135, s.y + 53, 50, 4);
+    for (let i = 0; i < 4; i++) ctx.fillRect(bx + 95 + i * 8, by + 60, 6, 4);
+
+    // === SPINDLE HEAD (slides on column, right side) ===
+    this.draw3DBox(bx + 75, by + 18, 45, 35, d + 5, '#4a4a4a');
+    // Spindle nose
+    ctx.fillStyle = '#555';
+    ctx.fillRect(bx + 92, by + 50, 12, 10);
+    ctx.fillStyle = '#777';
+    ctx.fillRect(bx + 94, by + 58, 8, 6);
+    // Tool tip
+    ctx.fillStyle = '#aaa';
+    ctx.fillRect(bx + 97, by + 63, 2, 4);
+
+    // === WORK TABLE (horizontal bed in front) ===
+    this.draw3DBox(bx + 110, by + bh - 45, 95, 20, d + 2, '#555');
+    // Table surface
+    ctx.fillStyle = '#666';
+    ctx.fillRect(bx + 112, by + bh - 47, 91, 4);
+    // T-slots on table
+    ctx.fillStyle = '#444';
+    ctx.fillRect(bx + 120, by + bh - 46, 75, 2);
+
+    // === WORKPIECE (clamp on table) ===
+    this.draw3DBox(bx + 135, by + bh - 58, 35, 12, d + 1, '#888');
+    ctx.fillStyle = '#aaa';
+    ctx.fillRect(bx + 137, by + bh - 60, 31, 4);
+    // Clamps
+    ctx.fillStyle = '#333';
+    ctx.fillRect(bx + 132, by + bh - 55, 5, 8);
+    ctx.fillRect(bx + 168, by + bh - 55, 5, 8);
+
+    // === CHIP GUARD / DOOR (transparent area) ===
+    ctx.fillStyle = 'rgba(200,230,255,0.06)';
+    ctx.fillRect(bx + 110, by + 30, 95, bh - 75);
+    ctx.strokeStyle = 'rgba(200,230,255,0.12)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(bx + 110, by + 30, 95, bh - 75);
+
+    // === COOLANT NOZZLE ===
+    ctx.fillStyle = '#555';
+    ctx.beginPath(); ctx.moveTo(bx + 100, by + 62); ctx.lineTo(bx + 110, by + 65); ctx.lineTo(bx + 108, by + 68); ctx.closePath(); ctx.fill();
+
+    // === STATUS LED ===
+    ctx.fillStyle = c;
+    ctx.shadowBlur = 8; ctx.shadowColor = c;
+    ctx.beginPath(); ctx.arc(bx + 28, by + 22, 3, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+
     // Label
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 13px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('🔧 CNC CUTTING', s.x + s.w/2, s.y + s.h + d + 14);
+    ctx.fillText('🔧 CNC CUTTING', bx + bw/2, by + bh + d + 14);
   },
 
   drawRobotStation(s, d) {
