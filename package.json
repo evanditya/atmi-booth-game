@@ -1,0 +1,16 @@
+{
+  "name": "atmi-workshop-overdrive",
+  "version": "1.0.0",
+  "description": "Overcooked-style automation workshop game for ATMI booth - TV display + phone controllers",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  },
+  "keywords": ["game", "websocket", "booth", "atmi", "workshop"],
+  "author": "Politeknik Industri ATMI Cikarang",
+  "license": "MIT"
+}

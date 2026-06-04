@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ATMI Controller</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; touch-action:none; -webkit-user-select:none; user-select:none; }
+  html, body { width:100%; height:100%; background:#0a0a0a; color:#fff; font-family:'Segoe UI',sans-serif; overflow:hidden; }
+  #app { width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative; }
+
+  /* Status bar */
+  #status { position:absolute; top:0; left:0; width:100%; padding:10px 16px; display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; background:rgba(0,0,0,0.4); z-index:10; }
+  #connStatus { display:flex; align-items:center; gap:6px; }
+  #connDot { width:8px; height:8px; border-radius:50%; background:#ff5252; }
+  #connDot.connected { background:#00e676; box-shadow:0 0 8px #00e676; }
+  #playerBadge { padding:3px 10px; border-radius:12px; font-weight:700; font-size:0.7rem; background:rgba(255,255,255,0.1); }
+
+  /* D-Pad */
+  #dpad { position:relative; width:180px; height:180px; margin-bottom:24px; }
+  .dpad-btn { position:absolute; width:60px; height:60px; background:rgba(255,255,255,0.08); border:2px solid rgba(255,255,255,0.15); border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.4rem; color:rgba(255,255,255,0.6); }
+  .dpad-btn:active, .dpad-btn.active { background:rgba(255,255,255,0.2); border-color:rgba(255,255,255,0.4); color:#fff; }
+  #btnUp { top:0; left:60px; }
+  #btnDown { bottom:0; left:60px; }
+  #btnLeft { top:60px; left:0; }
+  #btnRight { top:60px; right:0; }
+
+  /* Action buttons */
+  #actionArea { display:flex; gap:16px; align-items:center; }
+  #btnAction {
+    width:110px; height:110px; border-radius:50%;
+    background:rgba(0,230,118,0.15); border:3px solid #00e676;
+    color:#00e676; font-size:1rem; font-weight:800; letter-spacing:0.5px;
+    display:flex; align-items:center; justify-content:center; flex-direction:column;
+    box-shadow:0 0 20px rgba(0,230,118,0.2);
+  }
+  #btnAction:active, #btnAction.active {
+    background:rgba(0,230,118,0.35); box-shadow:0 0 30px rgba(0,230,118,0.4); transform:scale(0.95);
+  }
+  #btnAction span { font-size:0.7rem; opacity:0.7; margin-top:2px; }
+
+  #btnDrop {
+    width:70px; height:70px; border-radius:50%;
+    background:rgba(255,82,82,0.12); border:2px solid #ff5252;
+    color:#ff5252; font-size:0.75rem; font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #btnDrop:active, #btnDrop.active { background:rgba(255,82,82,0.3); transform:scale(0.95); }
+
+  /* Item indicator */
+  #itemBox { position:absolute; bottom:20px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:8px; padding:8px 16px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:20px; font-size:0.8rem; color:#aaa; }
+  #itemIcon { font-size:1.2rem; }
+
+  /* Connecting overlay */
+  #overlay { position:absolute; inset:0; background:rgba(0,0,0,0.85); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:20; }
+  #overlay.hidden { display:none; }
+  #overlay h2 { color:#00e676; margin-bottom:10px; }
+  #overlay p { color:#888; font-size:0.85rem; }
+
+  /* Disconnect banner */
+  #disconnectBanner { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:#b71c1c; color:#fff; padding:12px 24px; border-radius:8px; font-weight:700; z-index:15; display:none; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="status">
+    <div id="connStatus"><div id="connDot"></div><span id="connText">Menyambung...</span></div>
+    <div id="playerBadge">Menunggu...</div>
+  </div>
+
+  <div id="overlay">
+    <h2>ATMI WORKSHOP</h2>
+    <p>Menghubungkan ke server booth...</p>
+  </div>
+
+  <div id="disconnectBanner">Koneksi terputus. Refresh halaman.</div>
+
+  <div id="dpad">
+    <div class="dpad-btn" id="btnUp">▲</div>
+    <div class="dpad-btn" id="btnDown">▼</div>
+    <div class="dpad-btn" id="btnLeft">◀</div>
+    <div class="dpad-btn" id="btnRight">▶</div>
+  </div>
+
+  <div id="actionArea">
+    <div id="btnDrop">BUANG</div>
+    <div id="btnAction">AKSI<span>TAP/HOLD</span></div>
+  </div>
+
+  <div id="itemBox">
+    <span id="itemIcon">📭</span>
+    <span id="itemText">Tangan kosong</span>
+  </div>
+</div>
+
+<script>
+const wsUrl = 'ws://' + window.location.host + '/ws';
+let ws = null;
+let playerId = null;
+let reconnectTimer = null;
+
+const connDot = document.getElementById('connDot');
+const connText = document.getElementById('connText');
+const playerBadge = document.getElementById('playerBadge');
+const overlay = document.getElementById('overlay');
+const disconnectBanner = document.getElementById('disconnectBanner');
+const itemIcon = document.getElementById('itemIcon');
+const itemText = document.getElementById('itemText');
+
+function vibrate(ms) {
+  if (navigator.vibrate) navigator.vibrate(ms);
+}
+
+function connect() {
+  ws = new WebSocket(wsUrl + '/controller');
+
+  ws.onopen = () => {
+    connDot.classList.add('connected');
+    connText.textContent = 'Terhubung';
+    overlay.classList.add('hidden');
+    disconnectBanner.style.display = 'none';
+    clearTimeout(reconnectTimer);
+  };
+
+  ws.onmessage = (evt) => {
+    try {
+      const msg = JSON.parse(evt.data);
+      if (msg.type === 'identity') {
+        playerId = msg.playerId;
+        playerBadge.textContent = `Pemain ${msg.playerId} - ${msg.name}`;
+        playerBadge.style.background = msg.color + '22';
+        playerBadge.style.color = msg.color;
+        playerBadge.style.border = `1px solid ${msg.color}44`;
+      }
+      if (msg.type === 'item_update') {
+        itemIcon.textContent = msg.icon || '📭';
+        itemText.textContent = msg.text || 'Tangan kosong';
+      }
+      if (msg.type === 'haptic') {
+        vibrate(msg.duration || 50);
+      }
+    } catch(e) {}
+  };
+
+  ws.onclose = () => {
+    connDot.classList.remove('connected');
+    connText.textContent = 'Terputus';
+    overlay.classList.remove('hidden');
+    disconnectBanner.style.display = 'block';
+    reconnectTimer = setTimeout(connect, 2000);
+  };
+
+  ws.onerror = () => {
+    ws.close();
+  };
+}
+
+connect();
+
+// Input state
+const input = { up:false, down:false, left:false, right:false, action:false, drop:false };
+
+function sendInput() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ ...input }));
+  }
+}
+
+function setDir(key, el, active) {
+  input[key] = active;
+  el.classList.toggle('active', active);
+  sendInput();
+}
+
+function bindBtn(el, key) {
+  el.addEventListener('touchstart', (e) => { e.preventDefault(); setDir(key, el, true); vibrate(20); }, {passive:false});
+  el.addEventListener('touchend', (e) => { e.preventDefault(); setDir(key, el, false); });
+  el.addEventListener('touchcancel', (e) => { setDir(key, el, false); });
+  el.addEventListener('mousedown', (e) => { e.preventDefault(); setDir(key, el, true); });
+  el.addEventListener('mouseup', (e) => { e.preventDefault(); setDir(key, el, false); });
+  el.addEventListener('mouseleave', (e) => { setDir(key, el, false); });
+}
+
+bindBtn(document.getElementById('btnUp'), 'up');
+bindBtn(document.getElementById('btnDown'), 'down');
+bindBtn(document.getElementById('btnLeft'), 'left');
+bindBtn(document.getElementById('btnRight'), 'right');
+bindBtn(document.getElementById('btnAction'), 'action');
+bindBtn(document.getElementById('btnDrop'), 'drop');
+
+// Prevent sleep
+if ('wakeLock' in navigator) {
+  navigator.wakeLock.request('screen').catch(() => {});
+}
+</script>
+</body>
+</html>

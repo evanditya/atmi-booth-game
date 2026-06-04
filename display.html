@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ATMI Workshop Overdrive — Display</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; background:#080808; overflow:hidden; font-family:'Segoe UI',sans-serif; }
+  #container { position:relative; width:100vw; height:100vh; }
+  canvas { display:block; width:100%; height:100%; }
+
+  /* HUD Overlay */
+  #hud {
+    position:absolute; top:0; left:0; width:100%; padding:12px 20px;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    pointer-events:none; z-index:5;
+    background: rgba(0,0,0,0.3);
+  }
+  .hud-block { text-align:center; }
+  .hud-label { font-size:0.65rem; color:#888; text-transform:uppercase; letter-spacing:1px; }
+  .hud-value { font-size:1.6rem; font-weight:800; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,0.8); }
+  #scoreVal { color:#00e676; }
+  #timeVal { color:#ffb300; }
+  #comboVal { color:#00b0ff; }
+
+  /* Orders bar */
+  #ordersBar {
+    position:absolute; top:70px; left:50%; transform:translateX(-50%);
+    display:flex; gap:12px; z-index:5; pointer-events:none;
+  }
+  .order-card {
+    background:rgba(20,20,25,0.9); border:1px solid rgba(255,255,255,0.1);
+    border-radius:10px; padding:8px 14px; min-width:120px; text-align:center;
+    backdrop-filter:blur(4px);
+  }
+  .order-card.active { border-color:#ffb300; box-shadow:0 0 12px rgba(255,179,0,0.2); }
+  .order-card.danger { border-color:#ff5252; animation:pulse 0.5s infinite alternate; }
+  @keyframes pulse { from { box-shadow:0 0 5px rgba(255,82,82,0.2); } to { box-shadow:0 0 15px rgba(255,82,82,0.5); } }
+  .order-name { font-size:0.75rem; font-weight:700; color:#fff; margin-bottom:4px; }
+  .order-recipe { font-size:0.6rem; color:#888; margin-bottom:4px; }
+  .order-timer { font-size:0.9rem; font-weight:800; color:#ffb300; }
+  .order-timer.low { color:#ff5252; }
+
+  /* Start / Game Over screens */
+  .screen {
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; background:rgba(5,5,8,0.92);
+    z-index:10; transition:opacity 0.3s;
+  }
+  .screen.hidden { display:none; }
+  .screen h1 { font-size:2.8rem; color:#00e676; text-shadow:0 0 30px rgba(0,230,118,0.4); margin-bottom:6px; text-align:center; }
+  .screen h2 { font-size:1.8rem; color:#fff; margin-bottom:20px; }
+  .screen .sub { color:#888; font-size:1rem; margin-bottom:30px; text-align:center; max-width:600px; padding:0 20px; }
+  .btn {
+    background:#00e676; color:#000; border:none; padding:16px 48px; font-size:1.1rem;
+    font-weight:800; border-radius:10px; cursor:pointer; margin:8px;
+    box-shadow:0 0 25px rgba(0,230,118,0.3); pointer-events:auto;
+  }
+  .btn:active { transform:scale(0.96); }
+  .player-slot {
+    display:flex; align-items:center; gap:10px; margin:6px 0; padding:8px 16px;
+    background:rgba(255,255,255,0.05); border-radius:8px; min-width:220px;
+  }
+  .slot-color { width:14px; height:14px; border-radius:50%; }
+  .slot-status { font-size:0.8rem; color:#aaa; }
+  .slot-status.ready { color:#00e676; font-weight:700; }
+
+  /* Leaderboard */
+  #leaderboard { margin-top:16px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px 20px; min-width:280px; }
+  #leaderboard h3 { color:#00e676; font-size:0.8rem; text-align:center; margin-bottom:8px; text-transform:uppercase; letter-spacing:1px; }
+  .lb-row { display:flex; justify-content:space-between; padding:4px 0; font-size:0.85rem; border-bottom:1px solid rgba(255,255,255,0.04); }
+  .lb-row:last-child { border:none; }
+  .lb-rank { width:30px; color:#00b0ff; font-weight:700; }
+  .lb-name { flex:1; padding-left:8px; color:#ddd; }
+  .lb-score { font-weight:700; color:#fff; }
+
+  /* Connection indicator */
+  #connIndicator {
+    position:absolute; bottom:12px; right:16px; z-index:5;
+    display:flex; align-items:center; gap:6px; font-size:0.65rem; color:#555;
+  }
+  #connDot { width:7px; height:7px; border-radius:50%; background:#333; }
+  #connDot.on { background:#00e676; box-shadow:0 0 6px #00e676; }
+
+  /* Chaos banner */
+  #chaosBanner {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    background:rgba(255,82,82,0.15); border:2px solid #ff5252; color:#ff5252;
+    padding:14px 32px; border-radius:12px; font-size:1.4rem; font-weight:800;
+    z-index:6; pointer-events:none; opacity:0; transition:opacity 0.2s;
+    text-shadow:0 0 20px rgba(255,82,82,0.5); text-align:center;
+  }
+  #chaosBanner.show { opacity:1; }
+</style>
+</head>
+<body>
+<div id="container">
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="hud" style="display:none;">
+    <div class="hud-block"><div class="hud-label">Skor</div><div class="hud-value" id="scoreVal">0</div></div>
+    <div class="hud-block"><div class="hud-label">Combo</div><div class="hud-value" id="comboVal">x1</div></div>
+    <div class="hud-block"><div class="hud-label">Waktu</div><div class="hud-value" id="timeVal">90</div></div>
+  </div>
+
+  <div id="ordersBar" style="display:none;"></div>
+  <div id="chaosBanner"></div>
+
+  <div id="startScreen" class="screen">
+    <h1>ATMI WORKSHOP<br>OVERDRIVE</h1>
+    <div class="sub">Bengkel Otomasi Politeknik Industri ATMI Cikarang<br>Scan QR di HP untuk join sebagai operator!</div>
+    <div id="playerSlots"></div>
+    <button class="btn" id="btnStart" onclick="game.startRound()" disabled>MULAI SHIFT</button>
+  </div>
+
+  <div id="gameOverScreen" class="screen hidden">
+    <h2>SHIFT SELESAI!</h2>
+    <div class="sub" id="finalScore" style="font-size:2.5rem; color:#00e676; font-weight:900; margin-bottom:10px;">0</div>
+    <div class="sub" id="finalRank" style="margin-bottom:20px;">Trainee</div>
+    <div id="leaderboard"></div>
+    <button class="btn" onclick="game.resetToLobby()" style="margin-top:20px;">SHIFT BARU</button>
+  </div>
+
+  <div id="connIndicator"><div id="connDot"></div><span id="connText">Menunggu server...</span></div>
+</div>
+
+<script>
+/* =========================================================
+   ATMI WORKSHOP OVERDRIVE — Display Engine
+   ========================================================= */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  canvas.width = canvas.clientWidth;
+  canvas.height = canvas.clientHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ---------------------------------------------------------
+   WebSocket
+   --------------------------------------------------------- */
+const wsUrl = 'ws://' + window.location.host + '/ws';
+let ws = null;
+let wsConnected = false;
+
+function connectWS() {
+  ws = new WebSocket(wsUrl + '/display');
+  ws.onopen = () => {
+    wsConnected = true;
+    document.getElementById('connDot').classList.add('on');
+    document.getElementById('connText').textContent = 'Server aktif';
+  };
+  ws.onmessage = (evt) => {
+    try {
+      const msg = JSON.parse(evt.data);
+      if (msg.type === 'player_join') game.onPlayerJoin(msg);
+      if (msg.type === 'player_leave') game.onPlayerLeave(msg);
+      if (msg.type === 'input') game.onInput(msg);
+    } catch(e) {}
+  };
+  ws.onclose = () => {
+    wsConnected = false;
+    document.getElementById('connDot').classList.remove('on');
+    document.getElementById('connText').textContent = 'Reconnect...';
+    setTimeout(connectWS, 2000);
+  };
+}
+connectWS();
+
+function sendToController(playerId, data) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'to_controller', playerId, data }));
+  }
+}
+function sendToAllControllers(data) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'to_all_controllers', data }));
+  }
+}
+
+/* ---------------------------------------------------------
+   World Config
+   --------------------------------------------------------- */
+const WORLD_W = 1000;
+const WORLD_H = 600;
+
+const STATIONS = [
+  { id:'cnc',      name:'CNC Cutting',   x:80,  y:60,  w:220, h:160, color:'#00c853', icon:'🔧', prog:'Mesin' },
+  { id:'assembly', name:'Robot Assembly',x:700, y:60,  w:220, h:160, color:'#448aff', icon:'🤖', prog:'Mekatronik' },
+  { id:'program',  name:'Programming',   x:80,  y:380, w:220, h:160, color:'#00b0ff', icon:'💻', prog:'Mekatronik' },
+  { id:'qc',       name:'QC & Shipping', x:700, y:380, w:220, h:160, color:'#ffb300', icon:'📦', prog:'Manajemen' },
+  { id:'raw',      name:'Raw Materials', x:420, y:20,  w:160, h:70,  color:'#8d6e63', icon:'⛏️', prog:'Input' },
+  { id:'trash',    name:'Trash',         x:420, y:510, w:160, h:70,  color:'#ff5252', icon:'🗑️', prog:'Buang' },
+  { id:'breaker',  name:'Breaker Panel', x:460, y:260, w:80,  h:80,  color:'#aa00ff', icon:'⚡', prog:'Emergency' },
+];
+
+const RECIPES = {
+  'Gear Box':       { steps:['cnc','qc'],                    icon:'⚙️', time:25 },
+  'Robot Arm':      { steps:['cnc','assembly','qc'],         icon:'🦾', time:35 },
+  'Sensor Module':  { steps:['program','assembly','qc'],     icon:'📡', time:30 },
+  'Conveyor Belt':  { steps:['cnc','program','assembly','qc'], icon:'🔄', time:40 },
+};
+
+const ITEMS = {
+  raw:      { name:'Raw Metal',      icon:'⬜', color:'#9e9e9e' },
+  machined: { name:'Machined Part',  icon:'🔩', color:'#00c853' },
+  chip:     { name:'Programmed Chip',icon:'💾', color:'#00b0ff' },
+  robot:    { name:'Robot Arm',      icon:'🦾', color:'#448aff' },
+  sensor:   { name:'Sensor Module',  icon:'📡', color:'#448aff' },
+  conveyor: { name:'Conveyor Belt',  icon:'🔄', color:'#448aff' },
+  gear:     { name:'Gear Box',       icon:'⚙️', color:'#00c853' },
+  defective:{ name:'DEFECT!',        icon:'☠️', color:'#ff5252' },
+};
+
+const PLAYER_COLORS = ['#00e676','#448aff','#ff9100'];
+const PLAYER_NAMES = ['Hijau','Biru','Oranye'];
+
+/* ---------------------------------------------------------
+   Game State
+   --------------------------------------------------------- */
+const Game = {
+  state:'lobby', // lobby, playing, gameover
+  players: [],
+  workers: [],
+  items: [], // dropped items on ground
+  orders: [],
+  particles: [],
+  score: 0,
+  combo: 0,
+  multiplier: 1,
+  time: 90,
+  difficulty: 1,
+  spawnTimer: 0,
+  chaosTimer: 0,
+  powerOutage: false,
+  overheatStation: null,
+  lastTime: 0,
+  animFrame: null,
+  lb: [],
+
+  init() {
+    this.lb = this.loadLB();
+    this.workers = [
+      { id:1, x:500, y:300, vx:0, vy:0, color:PLAYER_COLORS[0], name:PLAYER_NAMES[0], active:false,
+        item:null, interacting:null, interactTimer:0, interactMax:0, facing:'down' },
+      { id:2, x:460, y:320, vx:0, vy:0, color:PLAYER_COLORS[1], name:PLAYER_NAMES[1], active:false,
+        item:null, interacting:null, interactTimer:0, interactMax:0, facing:'down' },
+      { id:3, x:540, y:320, vx:0, vy:0, color:PLAYER_COLORS[2], name:PLAYER_NAMES[2], active:false,
+        item:null, interacting:null, interactTimer:0, interactMax:0, facing:'down' },
+    ];
+    this.items = [];
+    this.orders = [];
+    this.particles = [];
+    this.updateLobby();
+    this.loop(0);
+  },
+
+  onPlayerJoin(msg) {
+    const w = this.workers[msg.playerId-1];
+    if (w) { w.active = true; }
+    this.updateLobby();
+  },
+
+  onPlayerLeave(msg) {
+    const w = this.workers[msg.playerId-1];
+    if (w) {
+      w.active = false;
+      w.vx = 0; w.vy = 0;
+      w.interacting = null;
+    }
+    this.updateLobby();
+  },
+
+  updateLobby() {
+    const slots = document.getElementById('playerSlots');
+    const btn = document.getElementById('btnStart');
+    const activeCount = this.workers.filter(w=>w.active).length;
+    slots.innerHTML = this.workers.map((w,i) => `
+      <div class="player-slot">
+        <div class="slot-color" style="background:${w.color}; box-shadow:0 0 8px ${w.color}66;"></div>
+        <div class="slot-status ${w.active?'ready':''}">${w.active ? 'Pemain '+w.name+' siap!' : 'Menunggu Pemain '+w.name+'...'}</div>
+      </div>
+    `).join('');
+    btn.disabled = activeCount === 0;
+    btn.textContent = activeCount === 0 ? 'MENUNGGU PEMAIN...' : 'MULAI SHIFT';
+  },
+
+  startRound() {
+    this.state = 'playing';
+    this.score = 0; this.combo = 0; this.multiplier = 1;
+    this.time = 90; this.difficulty = 1;
+    this.items = []; this.orders = []; this.particles = [];
+    this.spawnTimer = 3; this.chaosTimer = 15;
+    this.powerOutage = false; this.overheatStation = null;
+    this.workers.forEach(w => {
+      w.item = null; w.interacting = null; w.interactTimer = 0;
+      w.x = 500; w.y = 300; w.vx = 0; w.vy = 0;
+    });
+
+    document.getElementById('startScreen').classList.add('hidden');
+    document.getElementById('gameOverScreen').classList.add('hidden');
+    document.getElementById('hud').style.display = 'flex';
+    document.getElementById('ordersBar').style.display = 'flex';
+    this.lastTime = performance.now();
+  },
+
+  resetToLobby() {
+    this.state = 'lobby';
+    document.getElementById('gameOverScreen').classList.add('hidden');
+    document.getElementById('startScreen').classList.remove('hidden');
+    document.getElementById('hud').style.display = 'none';
+    document.getElementById('ordersBar').style.display = 'none';
+    this.updateLobby();
+  },
+
+  onInput(msg) {
+    const w = this.workers[msg.playerId-1];
+    if (!w || !w.active || this.state !== 'playing') return;
+
+    const speed = 220;
+    w.vx = 0; w.vy = 0;
+    if (msg.left)  { w.vx = -speed; w.facing = 'left'; }
+    if (msg.right) { w.vx = speed;  w.facing = 'right'; }
+    if (msg.up)    { w.vy = -speed; w.facing = 'up'; }
+    if (msg.down)  { w.vy = speed;  w.facing = 'down'; }
+
+    if (msg.action) this.tryAction(w);
+    if (msg.drop) this.tryDrop(w);
+  },
+
+  /* -------------------------------------------------------
+     Interaction Logic
+     ------------------------------------------------------- */
+  getStationAt(x, y) {
+    return STATIONS.find(s => x >= s.x && x <= s.x+s.w && y >= s.y && y <= s.y+s.h);
+  },
+
+  tryAction(w) {
+    if (w.interacting) return; // already busy
+    const s = this.getStationAt(w.x, w.y);
+    if (!s) return;
+
+    // Raw depot
+    if (s.id === 'raw') {
+      if (!w.item) {
+        w.item = 'raw';
+        this.fxPickup(w.x, w.y);
+        sendToController(w.id, { type:'item_update', icon:ITEMS.raw.icon, text:ITEMS.raw.name });
+      }
+      return;
+    }
+
+    // Trash
+    if (s.id === 'trash') {
+      if (w.item) {
+        w.item = null;
+        this.fxPoof(w.x, w.y, '#ff5252');
+        sendToController(w.id, { type:'item_update', icon:'📭', text:'Tangan kosong' });
+      }
+      return;
+    }
+
+    // Breaker panel (only during outage)
+    if (s.id === 'breaker') {
+      if (this.powerOutage) {
+        this.powerOutage = false;
+        this.fxPoof(w.x, w.y, '#aa00ff');
+        this.showBanner('Listrik kembali!');
+      }
+      return;
+    }
+
+    // Can't use stations during power outage
+    if (this.powerOutage && ['cnc','assembly','program','qc'].includes(s.id)) return;
+
+    // Overheated CNC
+    if (s.id === 'cnc' && this.overheatStation === 'cnc') {
+      this.overheatStation = null;
+      this.fxPoof(w.x, w.y, '#00c853');
+      this.showBanner('CNC Cooled Down');
+      return;
+    }
+
+    // CNC: hold 2.5s, raw -> machined (or defective 15%)
+    if (s.id === 'cnc') {
+      if (w.item === 'raw') {
+        w.interacting = 'cnc'; w.interactTimer = 0; w.interactMax = 2.5;
+      }
+      return;
+    }
+
+    // Programming: timing game (simplified to hold+release)
+    if (s.id === 'program') {
+      if (!w.item) {
+        w.interacting = 'program'; w.interactTimer = 0; w.interactMax = 2.0;
+      }
+      return;
+    }
+
+    // Assembly: mash (simplified to hold for 2.5s)
+    if (s.id === 'assembly') {
+      if (w.item === 'machined' || w.item === 'chip') {
+        w.interacting = 'assembly'; w.interactTimer = 0; w.interactMax = 2.5;
+      }
+      return;
+    }
+
+    // QC: deliver finished product
+    if (s.id === 'qc') {
+      if (w.item && ['gear','robot','sensor','conveyor'].includes(w.item)) {
+        this.deliverOrder(w.item, w);
+        w.item = null;
+        sendToController(w.id, { type:'item_update', icon:'📭', text:'Tangan kosong' });
+        this.fxPoof(w.x, w.y, '#ffb300');
+      } else if (w.item) {
+        // Wrong item delivered
+        this.score = Math.max(0, this.score - 30);
+        this.combo = 0; this.multiplier = 1;
+        w.item = null;
+        sendToController(w.id, { type:'item_update', icon:'📭', text:'Tangan kosong' });
+        this.fxPoof(w.x, w.y, '#ff5252');
+        this.showBanner('Salah kirim! -30');
+        sendToController(w.id, { type:'haptic', duration:200 });
+      }
+      return;
+    }
+  },
+
+  tryDrop(w) {
+    if (!w.item) return;
+    this.items.push({ type:w.item, x:w.x, y:w.y });
+    w.item = null;
+    sendToController(w.id, { type:'item_update', icon:'📭', text:'Tangan kosong' });
+  },
+
+  finishInteraction(w) {
+    const s = this.getStationAt(w.x, w.y);
+    if (!s) return;
+
+    if (w.interacting === 'cnc') {
+      w.item = Math.random() < 0.15 ? 'defective' : 'machined';
+      this.fxPoof(w.x, w.y, '#00c853');
+      sendToController(w.id, { type:'item_update', icon:ITEMS[w.item].icon, text:ITEMS[w.item].name });
+      // Overheat chance
+      if (Math.random() < 0.2) { this.overheatStation = 'cnc'; this.showBanner('CNC OVERHEAT!'); }
+    }
+
+    if (w.interacting === 'program') {
+      w.item = 'chip';
+      this.fxPoof(w.x, w.y, '#00b0ff');
+      sendToController(w.id, { type:'item_update', icon:ITEMS.chip.icon, text:ITEMS.chip.name });
+    }
+
+    if (w.interacting === 'assembly') {
+      if (w.item === 'machined') { w.item = 'robot'; }
+      else if (w.item === 'chip') { w.item = 'sensor'; }
+      this.fxPoof(w.x, w.y, '#448aff');
+      sendToController(w.id, { type:'item_update', icon:ITEMS[w.item].icon, text:ITEMS[w.item].name });
+    }
+
+    w.interacting = null; w.interactTimer = 0;
+  },
+
+  deliverOrder(itemKey, w) {
+    const order = this.orders.find(o => o.req === itemKey && !o.completed);
+    if (order) {
+      order.completed = true;
+      this.combo++;
+      this.multiplier = 1 + Math.floor(this.combo / 3);
+      const bonus = Math.ceil(order.timeLeft / 5) * 10;
+      const pts = (100 + bonus) * this.multiplier;
+      this.score += pts;
+      this.fxConfetti(w.x, w.y);
+      this.showBanner(`+${pts}`);
+      sendToController(w.id, { type:'haptic', duration:80 });
+    } else {
+      // No order needed this item
+      this.score += 20;
+      this.showBanner('+20 (Tak Diminta)');
+    }
+  },
+
+  /* -------------------------------------------------------
+     Game Loop
+     ------------------------------------------------------- */
+  update(dt) {
+    if (this.state !== 'playing') {
+      this.updateParticles(dt);
+      return;
+    }
+
+    this.time -= dt;
+    if (this.time <= 0) { this.time = 0; this.endGame(); return; }
+    this.difficulty = 1 + (90 - this.time) / 30;
+
+    // Spawn orders
+    this.spawnTimer -= dt;
+    if (this.spawnTimer <= 0 && this.orders.filter(o=>!o.completed).length < 4) {
+      const names = Object.keys(RECIPES);
+      const name = names[Math.floor(Math.random()*names.length)];
+      const rec = RECIPES[name];
+      this.orders.push({
+        name, req: name==='Gear Box'?'gear':name==='Robot Arm'?'robot':name==='Sensor Module'?'sensor':'conveyor',
+        icon: rec.icon, timeTotal: rec.time, timeLeft: rec.time, completed: false
+      });
+      this.spawnTimer = Math.max(4, 10 - this.difficulty * 1.5);
+    }
+
+    // Update order timers
+    for (const o of this.orders) {
+      if (!o.completed) {
+        o.timeLeft -= dt;
+        if (o.timeLeft <= 0) {
+          o.completed = true; o.failed = true;
+          this.score = Math.max(0, this.score - 50);
+          this.combo = 0; this.multiplier = 1;
+          this.showBanner('Order Gagal! -50');
+        }
+      }
+    }
+    this.orders = this.orders.filter(o => o.timeLeft > -3); // keep briefly for visual
+
+    // Chaos events
+    this.chaosTimer -= dt;
+    if (this.chaosTimer <= 0) {
+      this.triggerChaos();
+      this.chaosTimer = Math.max(10, 20 - this.difficulty * 2);
+    }
+
+    // Workers
+    for (const w of this.workers) {
+      if (!w.active) continue;
+
+      // Movement
+      if (!w.interacting) {
+        w.x += w.vx * dt;
+        w.y += w.vy * dt;
+        w.x = Math.max(20, Math.min(WORLD_W-20, w.x));
+        w.y = Math.max(20, Math.min(WORLD_H-20, w.y));
+      }
+
+      // Interaction progress
+      if (w.interacting) {
+        w.interactTimer += dt;
+        if (w.interactTimer >= w.interactMax) {
+          this.finishInteraction(w);
+        }
+      }
+    }
+
+    // Particles
+    this.updateParticles(dt);
+
+    // HUD
+    document.getElementById('scoreVal').textContent = this.score;
+    document.getElementById('timeVal').textContent = Math.ceil(this.time);
+    document.getElementById('comboVal').textContent = 'x' + this.multiplier;
+    this.renderOrders();
+  },
+
+  triggerChaos() {
+    const r = Math.random();
+    if (r < 0.35 && !this.powerOutage) {
+      this.powerOutage = true;
+      this.showBanner('⚡ POWER OUTAGE! ⚡');
+    } else if (r < 0.7 && !this.overheatStation) {
+      this.overheatStation = 'cnc';
+      this.showBanner('🔥 CNC OVERHEAT! 🔥');
+    } else {
+      // Rush order
+      const names = Object.keys(RECIPES);
+      const name = names[Math.floor(Math.random()*names.length)];
+      const rec = RECIPES[name];
+      this.orders.push({
+        name: name + ' [RUSH]', req: name==='Gear Box'?'gear':name==='Robot Arm'?'robot':name==='Sensor Module'?'sensor':'conveyor',
+        icon: rec.icon, timeTotal: rec.time*0.5, timeLeft: rec.time*0.5, completed: false, rush: true
+      });
+      this.showBanner('🚨 RUSH ORDER! 🚨');
+    }
+  },
+
+  showBanner(text) {
+    const b = document.getElementById('chaosBanner');
+    b.textContent = text;
+    b.classList.add('show');
+    setTimeout(() => b.classList.remove('show'), 1500);
+  },
+
+  renderOrders() {
+    const bar = document.getElementById('ordersBar');
+    bar.innerHTML = this.orders.filter(o=>!o.completed || o.timeLeft > -2).map(o => {
+      const pct = Math.max(0, o.timeLeft / o.timeTotal);
+      const danger = pct < 0.3 && !o.completed;
+      const cls = o.rush ? 'active' : (danger ? 'danger' : '');
+      return `<div class="order-card ${cls}">
+        <div class="order-name">${o.icon} ${o.name}</div>
+        <div class="order-timer ${danger?'low':''}">${Math.max(0,Math.ceil(o.timeLeft))}s</div>
+      </div>`;
+    }).join('');
+  },
+
+  endGame() {
+    this.state = 'gameover';
+    document.getElementById('hud').style.display = 'none';
+    document.getElementById('ordersBar').style.display = 'none';
+    document.getElementById('gameOverScreen').classList.remove('hidden');
+    document.getElementById('finalScore').textContent = this.score;
+
+    let rank = 'Trainee';
+    if (this.score >= 3000) rank = '🏆 Chief Engineer';
+    else if (this.score >= 2000) rank = '⭐ Plant Manager';
+    else if (this.score >= 1200) rank = '🔧 Senior Technician';
+    else if (this.score >= 600) rank = '⚙️ Line Operator';
+    else if (this.score >= 300) rank = '📦 Assembly Staff';
+    document.getElementById('finalRank').textContent = rank;
+
+    // Save leaderboard
+    const entry = { name:'SHIFT', score:this.score, date:new Date().toLocaleDateString('id-ID') };
+    this.lb.push(entry);
+    this.lb.sort((a,b)=>b.score-a.score);
+    this.lb = this.lb.slice(0,10);
+    this.storeLB();
+    this.renderLB();
+  },
+
+  renderLB() {
+    const box = document.getElementById('leaderboard');
+    box.innerHTML = '<h3>🏆 Leaderboard Bengkel</h3>' + this.lb.map((e,i) => {
+      const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`#${i+1}`;
+      return `<div class="lb-row"><span class="lb-rank">${medal}</span><span class="lb-name">${e.name}</span><span class="lb-score">${e.score}</span></div>`;
+    }).join('');
+  },
+
+  loadLB() { try { return JSON.parse(localStorage.getItem('atmiWorkshopLB'))||[]; } catch { return []; } },
+  storeLB() { localStorage.setItem('atmiWorkshopLB', JSON.stringify(this.lb)); },
+
+  /* -------------------------------------------------------
+     Particles
+     ------------------------------------------------------- */
+  fxPoof(x,y,color) { this.spawnParticles(x,y,color,12); }
+  fxPickup(x,y) { this.spawnParticles(x,y,'#fff',8); }
+  fxConfetti(x,y) {
+    for (let i=0;i<30;i++) {
+      const hue = Math.random()*360;
+      this.particles.push({x,y,vx:(Math.random()-0.5)*10,vy:(Math.random()-0.5)*10-4,life:1,decay:0.02,color:`hsl(${hue},80%,60%)`,size:Math.random()*4+2});
+    }
+  }
+  spawnParticles(x,y,color,count) {
+    for (let i=0;i<count;i++) {
+      this.particles.push({x,y,vx:(Math.random()-0.5)*7,vy:(Math.random()-0.5)*7,life:1,decay:Math.random()*0.04+0.02,color,size:Math.random()*3+1.5});
+    }
+  }
+  updateParticles(dt) {
+    for (let i=this.particles.length-1;i>=0;i--) {
+      const p=this.particles[i]; p.x+=p.vx; p.y+=p.vy; p.life-=p.decay; if(p.life<=0) this.particles.splice(i,1);
+    }
+  },
+
+  /* -------------------------------------------------------
+     Render
+     ------------------------------------------------------- */
+  draw() {
+    ctx.fillStyle = '#0d0f14';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    const sx = canvas.width / WORLD_W;
+    const sy = canvas.height / WORLD_H;
+    const s = Math.min(sx, sy);
+    const ox = (canvas.width - WORLD_W*s)/2;
+    const oy = (canvas.height - WORLD_H*s)/2;
+
+    ctx.save();
+    ctx.translate(ox, oy);
+    ctx.scale(s, s);
+
+    this.drawFloor();
+    this.drawStations();
+    this.drawItems();
+    this.drawWorkers();
+    this.drawParticles();
+    this.drawOverlays();
+
+    ctx.restore();
+  },
+
+  drawFloor() {
+    // Grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    ctx.lineWidth = 1;
+    for (let x=0;x<=WORLD_W;x+=50) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,WORLD_H); ctx.stroke(); }
+    for (let y=0;y<=WORLD_H;y+=50) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(WORLD_W,y); ctx.stroke(); }
+
+    // Walkway arrows
+    const t = performance.now()/1000;
+    ctx.fillStyle = 'rgba(255,255,255,0.025)';
+    for (let y=100;y<WORLD_H;y+=80) {
+      const yy = (y + t*40) % (WORLD_H+40) - 20;
+      ctx.beginPath(); ctx.moveTo(WORLD_W/2-5,yy); ctx.lineTo(WORLD_W/2,yy+10); ctx.lineTo(WORLD_W/2+5,yy); ctx.fill();
+    }
+  },
+
+  drawStations() {
+    for (const s of STATIONS) {
+      // Base
+      ctx.fillStyle = s.color + '15';
+      ctx.fillRect(s.x, s.y, s.w, s.h);
+      ctx.strokeStyle = s.color + '55';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(s.x, s.y, s.w, s.h);
+
+      // Icon & name
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(s.icon + ' ' + s.name, s.x + s.w/2, s.y + 28);
+      ctx.font = '11px sans-serif';
+      ctx.fillStyle = s.color;
+      ctx.fillText(s.prog, s.x + s.w/2, s.y + 44);
+
+      // Power outage dim
+      if (this.powerOutage && ['cnc','assembly','program','qc'].includes(s.id)) {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(s.x, s.y, s.w, s.h);
+      }
+
+      // Overheat warning
+      if (this.overheatStation === s.id) {
+        ctx.fillStyle = `rgba(255,82,82,${0.3 + Math.sin(performance.now()/200)*0.2})`;
+        ctx.fillRect(s.x, s.y, s.w, s.h);
+        ctx.fillStyle = '#ff5252';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText('🔥 OVERHEAT!', s.x+s.w/2, s.y+s.h/2+5);
+      }
+    }
+
+    // Breaker glow during outage
+    if (this.powerOutage) {
+      const b = STATIONS.find(s=>s.id==='breaker');
+      if (b) {
+        ctx.shadowBlur = 30;
+        ctx.shadowColor = '#aa00ff';
+        ctx.fillStyle = `rgba(170,0,255,${0.3 + Math.sin(performance.now()/150)*0.2})`;
+        ctx.fillRect(b.x, b.y, b.w, b.h);
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText('TAP!', b.x+b.w/2, b.y+b.h/2+4);
+      }
+    }
+  },
+
+  drawItems() {
+    for (const it of this.items) {
+      const info = ITEMS[it.type];
+      if (!info) continue;
+      ctx.fillStyle = info.color + '30';
+      ctx.beginPath(); ctx.arc(it.x, it.y, 18, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = info.color;
+      ctx.font = '20px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(info.icon, it.x, it.y);
+      ctx.textBaseline = 'alphabetic';
+    }
+  },
+
+  drawWorkers() {
+    for (const w of this.workers) {
+      if (!w.active) continue;
+
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.beginPath(); ctx.ellipse(w.x, w.y+14, 14, 6, 0, 0, Math.PI*2); ctx.fill();
+
+      // Body
+      ctx.fillStyle = w.color;
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = w.color;
+      ctx.beginPath(); ctx.arc(w.x, w.y, 14, 0, Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Hardhat
+      ctx.fillStyle = w.color;
+      ctx.beginPath();
+      ctx.ellipse(w.x, w.y-10, 12, 7, 0, Math.PI, 0);
+      ctx.fill();
+      ctx.fillRect(w.x-12, w.y-10, 24, 4);
+
+      // Direction indicator
+      const dirMap = { up:[0,-1], down:[0,1], left:[-1,0], right:[1,0] };
+      const d = dirMap[w.facing] || [0,1];
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.beginPath(); ctx.arc(w.x + d[0]*6, w.y + d[1]*6, 4, 0, Math.PI*2); ctx.fill();
+
+      // Carried item
+      if (w.item) {
+        const info = ITEMS[w.item];
+        ctx.fillStyle = '#fff';
+        ctx.font = '18px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(info.icon, w.x, w.y - 28);
+      }
+
+      // Interaction progress bar
+      if (w.interacting && w.interactMax > 0) {
+        const pct = w.interactTimer / w.interactMax;
+        const bw = 32; const bh = 5;
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(w.x - bw/2, w.y + 20, bw, bh);
+        ctx.fillStyle = '#00e676';
+        ctx.fillRect(w.x - bw/2, w.y + 20, bw * pct, bh);
+      }
+
+      // Name tag
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.beginPath(); ctx.roundRect(w.x-22, w.y+24, 44, 16, 4); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(w.name, w.x, w.y+35);
+    }
+  },
+
+  drawParticles() {
+    for (const p of this.particles) {
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.shadowBlur = 6; ctx.shadowColor = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  },
+
+  drawOverlays() {
+    // Power outage vignette
+    if (this.powerOutage) {
+      const g = ctx.createRadialGradient(WORLD_W/2, WORLD_H/2, 100, WORLD_W/2, WORLD_H/2, 500);
+      g.addColorStop(0, 'rgba(0,0,0,0)');
+      g.addColorStop(1, 'rgba(0,0,0,0.7)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0,0,WORLD_W,WORLD_H);
+    }
+  },
+
+  loop(ts) {
+    const dt = Math.min((ts - this.lastTime)/1000, 0.05);
+    this.lastTime = ts;
+    this.update(dt);
+    this.draw();
+    this.animFrame = requestAnimationFrame(t => this.loop(t));
+  }
+};
+
+const game = Game;
+game.init();
+</script>
+</body>
+</html>
