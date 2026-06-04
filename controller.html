@@ -17,15 +17,27 @@
   #connDot.connected { background:#00e676; box-shadow:0 0 8px #00e676; }
   #playerBadge { padding:3px 10px; border-radius:12px; font-weight:700; font-size:0.65rem; background:rgba(255,255,255,0.1); }
 
-  /* LEFT: D-Pad */
-  #leftArea { display:flex; align-items:center; justify-content:center; flex:1; }
-  #dpad { position:relative; width:160px; height:160px; }
-  .dpad-btn { position:absolute; width:52px; height:52px; background:rgba(255,255,255,0.08); border:2px solid rgba(255,255,255,0.15); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:1.3rem; color:rgba(255,255,255,0.6); }
-  .dpad-btn:active, .dpad-btn.active { background:rgba(255,255,255,0.2); border-color:rgba(255,255,255,0.4); color:#fff; }
-  #btnUp { top:0; left:54px; }
-  #btnDown { bottom:0; left:54px; }
-  #btnLeft { top:54px; left:0; }
-  #btnRight { top:54px; right:0; }
+  /* LEFT: Analog Joystick */
+  #leftArea { display:flex; align-items:center; justify-content:center; flex:1; position:relative; }
+  #joystick {
+    position:relative; width:140px; height:140px; touch-action:none;
+  }
+  #joyBase {
+    position:absolute; top:0; left:0; width:140px; height:140px;
+    border:3px solid rgba(255,255,255,0.12); border-radius:50%;
+    background:rgba(255,255,255,0.03);
+  }
+  #joyThumb {
+    position:absolute; top:50%; left:50%; width:56px; height:56px;
+    margin-top:-28px; margin-left:-28px;
+    background:rgba(255,255,255,0.15); border:2px solid rgba(255,255,255,0.3);
+    border-radius:50%; box-shadow:0 0 15px rgba(255,255,255,0.1);
+    transition:none;
+  }
+  #joyThumb.active {
+    background:rgba(0,230,118,0.25); border-color:#00e676;
+    box-shadow:0 0 20px rgba(0,230,118,0.3);
+  }
 
   /* CENTER: Item indicator */
   #centerArea { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; }
@@ -92,11 +104,9 @@
   <div id="disconnectBanner">Koneksi terputus.<br>Refresh halaman.</div>
 
   <div id="leftArea">
-    <div id="dpad">
-      <div class="dpad-btn" id="btnUp">▲</div>
-      <div class="dpad-btn" id="btnDown">▼</div>
-      <div class="dpad-btn" id="btnLeft">◀</div>
-      <div class="dpad-btn" id="btnRight">▶</div>
+    <div id="joystick">
+      <div id="joyBase"></div>
+      <div id="joyThumb"></div>
     </div>
   </div>
 
@@ -177,8 +187,8 @@ function connect() {
 
 connect();
 
-// Input state
-const input = { up:false, down:false, left:false, right:false, action:false, drop:false };
+// Input state (analog + buttons)
+const input = { dx:0, dy:0, action:false, drop:false };
 
 function sendInput() {
   if (ws && ws.readyState === WebSocket.OPEN) {
@@ -186,27 +196,91 @@ function sendInput() {
   }
 }
 
-function setDir(key, el, active) {
+function setBtn(key, active) {
   input[key] = active;
-  el.classList.toggle('active', active);
   sendInput();
 }
 
 function bindBtn(el, key) {
-  el.addEventListener('touchstart', (e) => { e.preventDefault(); setDir(key, el, true); vibrate(20); }, {passive:false});
-  el.addEventListener('touchend', (e) => { e.preventDefault(); setDir(key, el, false); });
-  el.addEventListener('touchcancel', (e) => { setDir(key, el, false); });
-  el.addEventListener('mousedown', (e) => { e.preventDefault(); setDir(key, el, true); });
-  el.addEventListener('mouseup', (e) => { e.preventDefault(); setDir(key, el, false); });
-  el.addEventListener('mouseleave', (e) => { setDir(key, el, false); });
+  el.addEventListener('touchstart', (e) => { e.preventDefault(); setBtn(key, true); vibrate(20); }, {passive:false});
+  el.addEventListener('touchend', (e) => { e.preventDefault(); setBtn(key, false); });
+  el.addEventListener('touchcancel', (e) => { setBtn(key, false); });
+  el.addEventListener('mousedown', (e) => { e.preventDefault(); setBtn(key, true); });
+  el.addEventListener('mouseup', (e) => { e.preventDefault(); setBtn(key, false); });
+  el.addEventListener('mouseleave', (e) => { setBtn(key, false); });
 }
 
-bindBtn(document.getElementById('btnUp'), 'up');
-bindBtn(document.getElementById('btnDown'), 'down');
-bindBtn(document.getElementById('btnLeft'), 'left');
-bindBtn(document.getElementById('btnRight'), 'right');
 bindBtn(document.getElementById('btnAction'), 'action');
 bindBtn(document.getElementById('btnDrop'), 'drop');
+
+// Analog Joystick
+const joystick = document.getElementById('joystick');
+const joyThumb = document.getElementById('joyThumb');
+const JOY_MAX = 70; // half of base width minus thumb radius allowance
+let joyActive = false;
+let joyCenterX = 0, joyCenterY = 0;
+
+function updateJoystick(clientX, clientY) {
+  const rect = joystick.getBoundingClientRect();
+  joyCenterX = rect.left + rect.width / 2;
+  joyCenterY = rect.top + rect.height / 2;
+  let x = clientX - joyCenterX;
+  let y = clientY - joyCenterY;
+  const dist = Math.sqrt(x*x + y*y);
+  if (dist > JOY_MAX) {
+    x = x / dist * JOY_MAX;
+    y = y / dist * JOY_MAX;
+  }
+  joyThumb.style.transform = `translate(${x}px, ${y}px)`;
+  input.dx = x / JOY_MAX;
+  input.dy = y / JOY_MAX;
+  sendInput();
+}
+
+function resetJoystick() {
+  joyThumb.style.transform = 'translate(0px, 0px)';
+  joyThumb.classList.remove('active');
+  input.dx = 0;
+  input.dy = 0;
+  joyActive = false;
+  sendInput();
+}
+
+joystick.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  joyActive = true;
+  joyThumb.classList.add('active');
+  updateJoystick(e.touches[0].clientX, e.touches[0].clientY);
+}, {passive:false});
+
+joystick.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (joyActive) updateJoystick(e.touches[0].clientX, e.touches[0].clientY);
+}, {passive:false});
+
+joystick.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  resetJoystick();
+});
+
+joystick.addEventListener('touchcancel', (e) => {
+  resetJoystick();
+});
+
+joystick.addEventListener('mousedown', (e) => {
+  e.preventDefault();
+  joyActive = true;
+  joyThumb.classList.add('active');
+  updateJoystick(e.clientX, e.clientY);
+});
+
+window.addEventListener('mousemove', (e) => {
+  if (joyActive) updateJoystick(e.clientX, e.clientY);
+});
+
+window.addEventListener('mouseup', (e) => {
+  if (joyActive) resetJoystick();
+});
 
 // Prevent sleep
 if ('wakeLock' in navigator) {

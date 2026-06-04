@@ -360,12 +360,21 @@ const Game = {
     const w = this.workers[msg.playerId-1];
     if (!w || !w.active || this.state !== 'playing') return;
 
-    const speed = 220;
-    w.vx = 0; w.vy = 0;
-    if (msg.left)  { w.vx = -speed; w.facing = 'left'; }
-    if (msg.right) { w.vx = speed;  w.facing = 'right'; }
-    if (msg.up)    { w.vy = -speed; w.facing = 'up'; }
-    if (msg.down)  { w.vy = speed;  w.facing = 'down'; }
+    const speed = 260;
+    // Analog joystick input
+    const dx = msg.dx || 0;
+    const dy = msg.dy || 0;
+    w.vx = dx * speed;
+    w.vy = dy * speed;
+
+    // Determine facing direction from analog input
+    if (Math.abs(dx) > 0.3 || Math.abs(dy) > 0.3) {
+      if (Math.abs(dx) > Math.abs(dy)) {
+        w.facing = dx > 0 ? 'right' : 'left';
+      } else {
+        w.facing = dy > 0 ? 'down' : 'up';
+      }
+    }
 
     if (msg.action) this.tryAction(w);
     if (msg.drop) this.tryDrop(w);
