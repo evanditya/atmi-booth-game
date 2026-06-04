@@ -37,8 +37,8 @@ const wss = new WebSocket.Server({ server });
 let displaySocket = null;
 const controllers = new Map(); // ws -> { id, color }
 
-const PLAYER_COLORS = ['#00e676', '#448aff', '#ff9100'];
-const PLAYER_NAMES = ['Hijau', 'Biru', 'Oranye'];
+const PLAYER_COLORS = ['#00e676', '#448aff', '#ff9100', '#ff4081'];
+const PLAYER_NAMES = ['Hijau', 'Biru', 'Oranye', 'Pink'];
 
 function broadcastToDisplay(msg) {
   if (displaySocket && displaySocket.readyState === WebSocket.OPEN) {

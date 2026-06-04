@@ -66,6 +66,16 @@
   .slot-status { font-size:0.8rem; color:#aaa; }
   .slot-status.ready { color:#00e676; font-weight:700; }
 
+  /* Mode selection */
+  .mode-btn {
+    padding:8px 14px; border-radius:8px; background:rgba(255,255,255,0.05);
+    border:1px solid rgba(255,255,255,0.1); color:#aaa; font-size:0.75rem;
+    font-weight:600; cursor:pointer; transition:all 0.15s; text-align:center;
+    flex:1; min-width:100px;
+  }
+  .mode-btn:hover { background:rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.2); }
+  .mode-btn.active { background:rgba(0,230,118,0.12); border-color:#00e676; color:#00e676; box-shadow:0 0 12px rgba(0,230,118,0.15); }
+
   /* Leaderboard */
   #leaderboard { margin-top:16px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px 20px; min-width:280px; }
   #leaderboard h3 { color:#00e676; font-size:0.8rem; text-align:center; margin-bottom:8px; text-transform:uppercase; letter-spacing:1px; }
@@ -111,7 +121,7 @@
   <canvas id="gameCanvas"></canvas>
 
   <div id="hud" style="display:none;">
-    <div class="hud-block"><div class="hud-label">Skor</div><div class="hud-value" id="scoreVal">0</div></div>
+    <div class="hud-block"><div class="hud-label" id="scoreLabel">Skor</div><div class="hud-value" id="scoreVal">0</div></div>
     <div class="hud-block"><div class="hud-label">Combo</div><div class="hud-value" id="comboVal">x1</div></div>
     <div class="hud-block"><div class="hud-label">Waktu</div><div class="hud-value" id="timeVal">90</div></div>
   </div>
@@ -122,6 +132,15 @@
   <div id="startScreen" class="screen">
     <h1>ATMI WORKSHOP<br>OVERDRIVE</h1>
     <div class="sub">Bengkel Otomasi Politeknik Industri ATMI Cikarang<br>Scan QR di HP untuk join sebagai operator!</div>
+
+    <!-- Mode Selection -->
+    <div id="modeSelect" style="margin-bottom:14px; display:flex; flex-wrap:wrap; justify-content:center; gap:8px; max-width:520px; width:90%;">
+      <div class="mode-btn active" data-mode="coop" onclick="game.setMode('coop')">🤝 Co-op</div>
+      <div class="mode-btn" data-mode="ffa" onclick="game.setMode('ffa')">👤 Free-for-All</div>
+      <div class="mode-btn" data-mode="1v1" onclick="game.setMode('1v1')">⚔️ 1 vs 1</div>
+      <div class="mode-btn" data-mode="2v2" onclick="game.setMode('2v2')">🟢🟢 vs 🔵🔵 2v2</div>
+    </div>
+    <div id="modeDesc" style="font-size:0.7rem; color:#888; margin-bottom:12px; text-align:center;">Kerja sama, skor bersama</div>
 
     <div id="tutorial" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:14px 18px; max-width:520px; width:90%; margin-bottom:16px; text-align:left; font-size:0.78rem; color:#bbb; line-height:1.6;">
       <div style="color:#00e676; font-weight:700; font-size:0.85rem; margin-bottom:8px; text-align:center;">📖 CARA MAIN</div>
@@ -148,7 +167,8 @@
   <div id="gameOverScreen" class="screen hidden">
     <h2>SHIFT SELESAI!</h2>
     <div class="sub" id="finalScore" style="font-size:2.5rem; color:#00e676; font-weight:900; margin-bottom:10px;">0</div>
-    <div class="sub" id="finalRank" style="margin-bottom:20px;">Trainee</div>
+    <div class="sub" id="finalRank" style="margin-bottom:10px;">Trainee</div>
+    <div id="vsResults" style="margin-bottom:14px; display:none; flex-direction:column; align-items:center; gap:6px; font-size:0.9rem;"></div>
     <div id="leaderboard"></div>
     <button class="btn" onclick="game.resetToLobby()" style="margin-top:20px;">SHIFT BARU</button>
   </div>
@@ -253,8 +273,15 @@ const ITEMS = {
   defective:{ name:'CACAT!',         icon:'☠️', color:'#ff5252' },
 };
 
-const PLAYER_COLORS = ['#00e676','#448aff','#ff9100'];
-const PLAYER_NAMES = ['Hijau','Biru','Oranye'];
+const PLAYER_COLORS = ['#00e676','#448aff','#ff9100','#ff4081'];
+const PLAYER_NAMES = ['Hijau','Biru','Oranye','Pink'];
+
+const GAME_MODES = {
+  COOP:  { id:'coop',  label:'🤝 Co-op',    desc:'Kerja sama, skor bersama' },
+  FFA:   { id:'ffa',   label:'👤 Free-for-All', desc:'Berebut order, skor masing-masing' },
+  VS1v1: { id:'1v1',   label:'⚔️ 1 vs 1',   desc:'P1 vs P2' },
+  VS2v2: { id:'2v2',   label:'🟢🟢 vs 🔵🔵 2v2', desc:'Tim Hijau+Biru vs Oranye+Pink' }
+};
 
 /* ---------------------------------------------------------
    Game State
@@ -281,12 +308,16 @@ const Game = {
 
   init() {
     this.lb = this.loadLB();
+    this.gameMode = 'coop';
+    this.playerScores = [0,0,0,0];
     this.workers = [
-      { id:1, x:500, y:300, vx:0, vy:0, color:PLAYER_COLORS[0], name:PLAYER_NAMES[0], active:false,
+      { id:1, x:480, y:280, vx:0, vy:0, color:PLAYER_COLORS[0], name:PLAYER_NAMES[0], active:false,
         item:null, interacting:null, interactTimer:0, interactMax:0, facing:'down' },
-      { id:2, x:460, y:320, vx:0, vy:0, color:PLAYER_COLORS[1], name:PLAYER_NAMES[1], active:false,
+      { id:2, x:520, y:280, vx:0, vy:0, color:PLAYER_COLORS[1], name:PLAYER_NAMES[1], active:false,
         item:null, interacting:null, interactTimer:0, interactMax:0, facing:'down' },
-      { id:3, x:540, y:320, vx:0, vy:0, color:PLAYER_COLORS[2], name:PLAYER_NAMES[2], active:false,
+      { id:3, x:480, y:340, vx:0, vy:0, color:PLAYER_COLORS[2], name:PLAYER_NAMES[2], active:false,
+        item:null, interacting:null, interactTimer:0, interactMax:0, facing:'down' },
+      { id:4, x:520, y:340, vx:0, vy:0, color:PLAYER_COLORS[3], name:PLAYER_NAMES[3], active:false,
         item:null, interacting:null, interactTimer:0, interactMax:0, facing:'down' },
     ];
     this.items = [];
@@ -312,6 +343,15 @@ const Game = {
     this.updateLobby();
   },
 
+  setMode(mode) {
+    this.gameMode = mode;
+    document.querySelectorAll('.mode-btn').forEach(el => {
+      el.classList.toggle('active', el.dataset.mode === mode);
+    });
+    const info = Object.values(GAME_MODES).find(m => m.id === mode);
+    document.getElementById('modeDesc').textContent = info ? info.desc : '';
+  },
+
   updateLobby() {
     const slots = document.getElementById('playerSlots');
     const btn = document.getElementById('btnStart');
@@ -319,23 +359,31 @@ const Game = {
     slots.innerHTML = this.workers.map((w,i) => `
       <div class="player-slot">
         <div class="slot-color" style="background:${w.color}; box-shadow:0 0 8px ${w.color}66;"></div>
-        <div class="slot-status ${w.active?'ready':''}">${w.active ? 'Pemain '+w.name+' siap!' : 'Menunggu Pemain '+w.name+'...'}</div>
+        <div class="slot-status ${w.active?'ready':''}">${w.active ? 'Pemain '+w.name+' siap!' : 'Slot '+w.name+' kosong'}</div>
       </div>
     `).join('');
-    btn.disabled = activeCount === 0;
-    btn.textContent = activeCount === 0 ? 'MENUNGGU PEMAIN...' : 'MULAI SHIFT';
+    const needPlayers = this.gameMode === '2v2' ? 4 : this.gameMode === '1v1' ? 2 : 1;
+    const canStart = activeCount >= needPlayers;
+    btn.disabled = !canStart;
+    if (!canStart) {
+      btn.textContent = `BUTUH ${needPlayers} PEMAIN...`;
+    } else {
+      btn.textContent = 'MULAI SHIFT';
+    }
   },
 
   startRound() {
     this.state = 'playing';
     this.score = 0; this.combo = 0; this.multiplier = 1;
+    this.playerScores = [0,0,0,0];
     this.time = 90; this.difficulty = 1;
     this.items = []; this.orders = []; this.particles = [];
     this.spawnTimer = 3; this.chaosTimer = 15;
     this.powerOutage = false; this.overheatStation = null;
-    this.workers.forEach(w => {
+    const spawns = [{x:480,y:280},{x:520,y:280},{x:480,y:340},{x:520,y:340}];
+    this.workers.forEach((w,i) => {
       w.item = null; w.interacting = null; w.interactTimer = 0;
-      w.x = 500; w.y = 300; w.vx = 0; w.vy = 0;
+      w.x = spawns[i].x; w.y = spawns[i].y; w.vx = 0; w.vy = 0;
     });
 
     document.getElementById('startScreen').classList.add('hidden');
@@ -529,13 +577,28 @@ const Game = {
       this.multiplier = 1 + Math.floor(this.combo / 3);
       const bonus = Math.ceil(order.timeLeft / 5) * 10;
       const pts = (100 + bonus) * this.multiplier;
-      this.score += pts;
+
+      // Mode-specific scoring
+      if (this.gameMode === 'coop') {
+        this.score += pts;
+      } else {
+        // Individual score for the player who delivered
+        this.playerScores[w.id - 1] += pts;
+        // In FFA/1v1/2v2, also update total score for compatibility
+        this.score += pts;
+      }
+
       this.fxConfetti(w.x, w.y);
       this.showBanner(`+${pts}`);
       sendToController(w.id, { type:'haptic', duration:80 });
     } else {
       // No order needed this item
-      this.score += 20;
+      if (this.gameMode === 'coop') {
+        this.score += 20;
+      } else {
+        this.playerScores[w.id - 1] += 20;
+        this.score += 20;
+      }
       this.showBanner('+20 (Tak Diminta)');
     }
   },
@@ -612,9 +675,21 @@ const Game = {
     this.updateParticles(dt);
 
     // HUD
-    document.getElementById('scoreVal').textContent = this.score;
     document.getElementById('timeVal').textContent = Math.ceil(this.time);
     document.getElementById('comboVal').textContent = 'x' + this.multiplier;
+    if (this.gameMode === 'coop') {
+      document.getElementById('scoreVal').textContent = this.score;
+      document.getElementById('scoreLabel').textContent = 'Skor Tim';
+    } else if (this.gameMode === '2v2') {
+      const teamA = this.playerScores[0] + this.playerScores[1];
+      const teamB = this.playerScores[2] + this.playerScores[3];
+      document.getElementById('scoreVal').textContent = teamA + ' : ' + teamB;
+      document.getElementById('scoreLabel').textContent = '🟢🟢 vs 🔵🔵';
+    } else {
+      const top = Math.max(...this.playerScores);
+      document.getElementById('scoreVal').textContent = top;
+      document.getElementById('scoreLabel').textContent = 'Skor Tertinggi';
+    }
     this.renderOrders();
   },
 
@@ -674,17 +749,50 @@ const Game = {
     document.getElementById('ordersBar').style.display = 'none';
     document.getElementById('recipeGuide').style.display = 'none';
     document.getElementById('gameOverScreen').classList.remove('hidden');
-    document.getElementById('finalScore').textContent = this.score;
+    const vsBox = document.getElementById('vsResults');
+    vsBox.style.display = 'none';
+    vsBox.innerHTML = '';
 
-    let rank = 'Trainee';
-    if (this.score >= 3000) rank = '🏆 Chief Engineer';
-    else if (this.score >= 2000) rank = '⭐ Plant Manager';
-    else if (this.score >= 1200) rank = '🔧 Senior Technician';
-    else if (this.score >= 600) rank = '⚙️ Line Operator';
-    else if (this.score >= 300) rank = '📦 Assembly Staff';
-    document.getElementById('finalRank').textContent = rank;
+    if (this.gameMode === 'coop') {
+      document.getElementById('finalScore').textContent = this.score;
+      let rank = 'Trainee';
+      if (this.score >= 3000) rank = '🏆 Chief Engineer';
+      else if (this.score >= 2000) rank = '⭐ Plant Manager';
+      else if (this.score >= 1200) rank = '🔧 Senior Technician';
+      else if (this.score >= 600) rank = '⚙️ Line Operator';
+      else if (this.score >= 300) rank = '📦 Assembly Staff';
+      document.getElementById('finalRank').textContent = rank;
+    } else {
+      // VS modes: show individual results
+      vsBox.style.display = 'flex';
+      document.getElementById('finalRank').textContent = this.gameMode === '2v2' ? 'Hasil Tim' : 'Hasil Pemain';
 
-    // Save leaderboard
+      if (this.gameMode === '2v2') {
+        const teamA = this.playerScores[0] + this.playerScores[1];
+        const teamB = this.playerScores[2] + this.playerScores[3];
+        const winner = teamA > teamB ? '🟢🟢 TIM A MENANG!' : teamB > teamA ? '🔵🔵 TIM B MENANG!' : '⚖️ SERI!';
+        vsBox.innerHTML = `
+          <div style="color:#00e676; font-weight:700; font-size:1.1rem;">${winner}</div>
+          <div style="color:#888;">Tim Hijau+Biru: <strong style="color:#fff;">${teamA}</strong></div>
+          <div style="color:#888;">Tim Oranye+Pink: <strong style="color:#fff;">${teamB}</strong></div>
+        `;
+        document.getElementById('finalScore').textContent = teamA + ' : ' + teamB;
+      } else {
+        // FFA / 1v1
+        const sorted = this.playerScores.map((s,i) => ({score:s, name:PLAYER_NAMES[i], color:PLAYER_COLORS[i]}))
+          .sort((a,b) => b.score - a.score);
+        const winner = sorted[0].score > sorted[1].score ? `🥇 ${sorted[0].name} MENANG!` : '🏆 SERI!';
+        let html = `<div style="color:#ffb300; font-weight:700; font-size:1rem;">${winner}</div>`;
+        sorted.forEach((p,i) => {
+          const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'4️⃣';
+          html += `<div style="color:${p.color};">${medal} ${p.name}: <strong>${p.score}</strong></div>`;
+        });
+        vsBox.innerHTML = html;
+        document.getElementById('finalScore').textContent = sorted[0].score;
+      }
+    }
+
+    // Save leaderboard (use total score)
     const entry = { name:'SHIFT', score:this.score, date:new Date().toLocaleDateString('id-ID') };
     this.lb.push(entry);
     this.lb.sort((a,b)=>b.score-a.score);
