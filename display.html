@@ -565,19 +565,19 @@ const Game = {
       this.spawnTimer = Math.max(4, 10 - this.difficulty * 1.5);
     }
 
-    // Update order timers
-    for (const o of this.orders) {
+    // Update order timers — remove failed immediately
+    for (let i = this.orders.length - 1; i >= 0; i--) {
+      const o = this.orders[i];
       if (!o.completed) {
         o.timeLeft -= dt;
         if (o.timeLeft <= 0) {
-          o.completed = true; o.failed = true;
+          this.orders.splice(i, 1);
           this.score = Math.max(0, this.score - 50);
           this.combo = 0; this.multiplier = 1;
           this.showBanner('Order Gagal! -50');
         }
       }
     }
-    this.orders = this.orders.filter(o => o.timeLeft > -3); // keep briefly for visual
 
     // Chaos events
     this.chaosTimer -= dt;
@@ -647,9 +647,9 @@ const Game = {
 
   renderOrders() {
     const bar = document.getElementById('ordersBar');
-    bar.innerHTML = this.orders.filter(o=>!o.completed || o.timeLeft > -2).map(o => {
+    bar.innerHTML = this.orders.map(o => {
       const pct = Math.max(0, o.timeLeft / o.timeTotal);
-      const danger = pct < 0.3 && !o.completed;
+      const danger = pct < 0.3;
       const cls = o.rush ? 'active' : (danger ? 'danger' : '');
       const rec = RECIPES[o.name.replace(' [RUSH]','')];
       const steps = rec ? rec.steps.map(s => {
