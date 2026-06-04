@@ -138,8 +138,8 @@
     <h4>📖 Resep Produksi</h4>
     <div class="recipe-line"><span class="recipe-res">⚙️ Gear Box</span><span class="recipe-arrow">➜</span>⛏️ ➜ 🔧 ➜ 📦</div>
     <div class="recipe-line"><span class="recipe-res">🦾 Robot Arm</span><span class="recipe-arrow">➜</span>⛏️ ➜ 🔧 ➜ 🤖 ➜ 📦</div>
-    <div class="recipe-line"><span class="recipe-res">📡 Sensor</span><span class="recipe-arrow">➜</span>💻 ➜ 🤖 ➜ 📦</div>
-    <div class="recipe-line"><span class="recipe-res">💾 Control Chip</span><span class="recipe-arrow">➜</span>💻 ➜ 📦</div>
+    <div class="recipe-line"><span class="recipe-res">📡 Sensor</span><span class="recipe-arrow">➜</span>⛏️ ➜ 💻 ➜ 🤖 ➜ 📦</div>
+    <div class="recipe-line"><span class="recipe-res">💾 Control Chip</span><span class="recipe-arrow">➜</span>⛏️ ➜ 💻 ➜ 📦</div>
   </div>
 
   <div id="connIndicator"><div id="connDot"></div><span id="connText">Menunggu server...</span></div>
@@ -226,14 +226,12 @@ const RECIPES = {
 };
 
 const ITEMS = {
-  raw:      { name:'Raw Metal',      icon:'⬜', color:'#9e9e9e' },
-  machined: { name:'Machined Part',  icon:'🔩', color:'#00c853' },
-  chip:     { name:'Programmed Chip',icon:'💾', color:'#00b0ff' },
+  raw:      { name:'Bahan Baku',     icon:'⛏️', color:'#8d6e63' },
+  machined: { name:'Besi Potong',    icon:'🔩', color:'#00c853' },
+  chip:     { name:'Chip Program',   icon:'💾', color:'#00b0ff' },
   robot:    { name:'Robot Arm',      icon:'🦾', color:'#448aff' },
   sensor:   { name:'Sensor Module',  icon:'📡', color:'#448aff' },
-  conveyor: { name:'Conveyor Belt',  icon:'🔄', color:'#448aff' },
-  gear:     { name:'Gear Box',       icon:'⚙️', color:'#00c853' },
-  defective:{ name:'DEFECT!',        icon:'☠️', color:'#ff5252' },
+  defective:{ name:'CACAT!',         icon:'☠️', color:'#ff5252' },
 };
 
 const PLAYER_COLORS = ['#00e676','#448aff','#ff9100'];
@@ -415,9 +413,9 @@ const Game = {
       return;
     }
 
-    // Programming: timing game (simplified to hold+release)
+    // Programming: consume raw, produce chip
     if (s.id === 'program') {
-      if (!w.item) {
+      if (w.item === 'raw') {
         w.interacting = 'program'; w.interactTimer = 0; w.interactMax = 2.0;
       }
       return;
@@ -888,7 +886,7 @@ const Game = {
       else if (s.id === 'breaker' && this.powerOutage) { hint = 'Reset Listrik!'; color = '#aa00ff'; }
       else if (s.id === 'cnc' && !this.powerOutage && this.overheatStation !== 'cnc' && w.item === 'raw') { hint = 'Potong (Tahan AKSI)'; color = '#00c853'; }
       else if (s.id === 'cnc' && this.overheatStation === 'cnc') { hint = 'Dinginkan Dulu!'; color = '#ff5252'; }
-      else if (s.id === 'program' && !this.powerOutage && !w.item) { hint = 'Program (Tahan AKSI)'; color = '#00b0ff'; }
+      else if (s.id === 'program' && !this.powerOutage && w.item === 'raw') { hint = 'Program Chip (Tahan AKSI)'; color = '#00b0ff'; }
       else if (s.id === 'assembly' && !this.powerOutage && (w.item === 'machined' || w.item === 'chip')) { hint = 'Rakit (Tahan AKSI)'; color = '#448aff'; }
       else if (s.id === 'qc' && w.item && ['machined','robot','sensor','chip'].includes(w.item) && !w.interacting) { hint = 'Inspeksi (Tahan AKSI)'; color = '#ffb300'; }
       else if (s.id === 'qc' && w.interacting === 'qc_inspect') { hint = 'Mengecek...'; color = '#ffb300'; }
