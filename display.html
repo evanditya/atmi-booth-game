@@ -744,8 +744,16 @@ const Game = {
 
     this.drawFloor();
     this.drawStations();
-    this.drawItems();
-    this.drawWorkers();
+    // Depth sort: items + workers by Y position (back to front)
+    const renderList = [
+      ...this.items.map(it => ({ type:'item', y:it.y, obj:it })),
+      ...this.workers.filter(w=>w.active).map(w => ({ type:'worker', y:w.y, obj:w }))
+    ];
+    renderList.sort((a,b) => a.y - b.y);
+    for (const entry of renderList) {
+      if (entry.type === 'item') this.drawOneItem(entry.obj);
+      else this.drawOneWorker(entry.obj);
+    }
     this.drawParticles();
     this.drawHints();
     this.drawOverlays();
@@ -754,52 +762,104 @@ const Game = {
   },
 
   drawFloor() {
-    // Grid
-    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    // 3D floor base
+    const g = ctx.createRadialGradient(WORLD_W/2, WORLD_H/2, 50, WORLD_W/2, WORLD_H/2, 600);
+    g.addColorStop(0, '#13151c');
+    g.addColorStop(1, '#0a0c10');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+
+    // Perspective grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.025)';
     ctx.lineWidth = 1;
-    for (let x=0;x<=WORLD_W;x+=50) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,WORLD_H); ctx.stroke(); }
-    for (let y=0;y<=WORLD_H;y+=50) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(WORLD_W,y); ctx.stroke(); }
+    for (let x=0; x<=WORLD_W; x+=50) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, WORLD_H); ctx.stroke();
+    }
+    for (let y=0; y<=WORLD_H; y+=50) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(WORLD_W, y); ctx.stroke();
+    }
+
+    // Floor edge shadow (fake depth)
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(0, WORLD_H-8, WORLD_W, 8);
+    ctx.fillRect(WORLD_W-8, 0, 8, WORLD_H);
 
     // Walkway arrows
     const t = performance.now()/1000;
-    ctx.fillStyle = 'rgba(255,255,255,0.025)';
-    for (let y=100;y<WORLD_H;y+=80) {
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    for (let y=100; y<WORLD_H; y+=80) {
       const yy = (y + t*40) % (WORLD_H+40) - 20;
-      ctx.beginPath(); ctx.moveTo(WORLD_W/2-5,yy); ctx.lineTo(WORLD_W/2,yy+10); ctx.lineTo(WORLD_W/2+5,yy); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(WORLD_W/2-5, yy); ctx.lineTo(WORLD_W/2, yy+10); ctx.lineTo(WORLD_W/2+5, yy); ctx.fill();
     }
   },
 
   drawStations() {
     for (const s of STATIONS) {
-      // Base
-      ctx.fillStyle = s.color + '15';
+      const h = 14; // 3D height
+
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillRect(s.x + 4, s.y + h + 4, s.w, s.h);
+
+      // Side faces (3D depth)
+      ctx.fillStyle = s.color + '40';
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y + s.h);
+      ctx.lineTo(s.x + 4, s.y + s.h + h);
+      ctx.lineTo(s.x + s.w + 4, s.y + s.h + h);
+      ctx.lineTo(s.x + s.w, s.y + s.h);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = s.color + '25';
+      ctx.beginPath();
+      ctx.moveTo(s.x + s.w, s.y);
+      ctx.lineTo(s.x + s.w + 4, s.y + h);
+      ctx.lineTo(s.x + s.w + 4, s.y + s.h + h);
+      ctx.lineTo(s.x + s.w, s.y + s.h);
+      ctx.closePath();
+      ctx.fill();
+
+      // Top face
+      ctx.fillStyle = s.color + '18';
       ctx.fillRect(s.x, s.y, s.w, s.h);
-      ctx.strokeStyle = s.color + '55';
+      ctx.strokeStyle = s.color + '60';
       ctx.lineWidth = 2;
       ctx.strokeRect(s.x, s.y, s.w, s.h);
 
+      // Top highlight line
+      ctx.strokeStyle = s.color + '35';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(s.x, s.y + s.h); ctx.lineTo(s.x + s.w, s.y + s.h); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(s.x + s.w, s.y); ctx.lineTo(s.x + s.w, s.y + s.h); ctx.stroke();
+
       // Icon & name
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold 16px sans-serif';
+      ctx.font = 'bold 15px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(s.icon + ' ' + s.name, s.x + s.w/2, s.y + 28);
-      ctx.font = '11px sans-serif';
+      ctx.fillText(s.icon + ' ' + s.name, s.x + s.w/2, s.y + 26);
+      ctx.font = '10px sans-serif';
       ctx.fillStyle = s.color;
-      ctx.fillText(s.prog, s.x + s.w/2, s.y + 44);
+      ctx.fillText(s.prog, s.x + s.w/2, s.y + 40);
 
       // Power outage dim
       if (this.powerOutage && ['cnc','assembly','program','qc'].includes(s.id)) {
-        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
         ctx.fillRect(s.x, s.y, s.w, s.h);
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y + s.h); ctx.lineTo(s.x + 4, s.y + s.h + h);
+        ctx.lineTo(s.x + s.w + 4, s.y + s.h + h); ctx.lineTo(s.x + s.w, s.y + s.h);
+        ctx.closePath(); ctx.fill();
       }
 
       // Overheat warning
       if (this.overheatStation === s.id) {
-        ctx.fillStyle = `rgba(255,82,82,${0.3 + Math.sin(performance.now()/200)*0.2})`;
+        ctx.fillStyle = `rgba(255,82,82,${0.25 + Math.sin(performance.now()/200)*0.15})`;
         ctx.fillRect(s.x, s.y, s.w, s.h);
         ctx.fillStyle = '#ff5252';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.fillText('🔥 OVERHEAT!', s.x+s.w/2, s.y+s.h/2+5);
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillText('🔥 OVERHEAT!', s.x+s.w/2, s.y+s.h/2+4);
       }
     }
 
@@ -807,87 +867,107 @@ const Game = {
     if (this.powerOutage) {
       const b = STATIONS.find(s=>s.id==='breaker');
       if (b) {
-        ctx.shadowBlur = 30;
+        const h = 14;
+        ctx.shadowBlur = 25;
         ctx.shadowColor = '#aa00ff';
-        ctx.fillStyle = `rgba(170,0,255,${0.3 + Math.sin(performance.now()/150)*0.2})`;
+        ctx.fillStyle = `rgba(170,0,255,${0.25 + Math.sin(performance.now()/150)*0.15})`;
         ctx.fillRect(b.x, b.y, b.w, b.h);
+        ctx.fillRect(b.x + b.w, b.y, 4, b.h);
+        ctx.fillRect(b.x, b.y + b.h, b.w + 4, h);
         ctx.shadowBlur = 0;
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText('TAP!', b.x+b.w/2, b.y+b.h/2+4);
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText('TAP!', b.x+b.w/2, b.y+b.h/2+3);
       }
     }
   },
 
-  drawItems() {
-    for (const it of this.items) {
-      const info = ITEMS[it.type];
-      if (!info) continue;
-      ctx.fillStyle = info.color + '30';
-      ctx.beginPath(); ctx.arc(it.x, it.y, 18, 0, Math.PI*2); ctx.fill();
+  drawOneItem(it) {
+    const info = ITEMS[it.type];
+    if (!info) return;
+    const t = performance.now() / 800;
+    const bob = Math.sin(t + it.x) * 3;
+    const by = it.y + bob;
+
+    // Shadow on floor
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath(); ctx.ellipse(it.x, it.y + 10, 14, 5, 0, 0, Math.PI*2); ctx.fill();
+
+    // Glow
+    ctx.fillStyle = info.color + '20';
+    ctx.beginPath(); ctx.arc(it.x, by, 22, 0, Math.PI*2); ctx.fill();
+
+    // Icon
+    ctx.fillStyle = info.color;
+    ctx.font = '22px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(info.icon, it.x, by);
+    ctx.textBaseline = 'alphabetic';
+  },
+
+  drawOneWorker(w) {
+    // 3D Shadow on floor
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(w.x, w.y + 16, 15, 6, 0, 0, Math.PI*2); ctx.fill();
+
+    // Body (3D cylinder look)
+    ctx.fillStyle = w.color + '40';
+    ctx.beginPath(); ctx.ellipse(w.x, w.y + 10, 14, 8, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = w.color;
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = w.color;
+    ctx.beginPath(); ctx.arc(w.x, w.y, 15, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Hardhat (3D dome)
+    ctx.fillStyle = w.color;
+    ctx.beginPath(); ctx.ellipse(w.x, w.y - 12, 14, 8, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = w.color + 'cc';
+    ctx.fillRect(w.x - 15, w.y - 12, 30, 4);
+    // Hat brim
+    ctx.fillStyle = w.color + '90';
+    ctx.beginPath(); ctx.ellipse(w.x, w.y - 8, 16, 4, 0, 0, Math.PI*2); ctx.fill();
+
+    // Eyes (cute 3D look)
+    ctx.fillStyle = '#fff';
+    const dirMap = { up:[0,-1], down:[0,1], left:[-1,0], right:[1,0] };
+    const d = dirMap[w.facing] || [0,1];
+    ctx.beginPath(); ctx.arc(w.x - 5 + d[0]*2, w.y - 2 + d[1]*2, 3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(w.x + 5 + d[0]*2, w.y - 2 + d[1]*2, 3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(w.x - 5 + d[0]*3, w.y - 2 + d[1]*3, 1.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(w.x + 5 + d[0]*3, w.y - 2 + d[1]*3, 1.5, 0, Math.PI*2); ctx.fill();
+
+    // Carried item (floating above head)
+    if (w.item) {
+      const info = ITEMS[w.item];
+      const bob = Math.sin(performance.now()/600 + w.id) * 3;
+      ctx.fillStyle = 'rgba(0,0,0,0.2)';
+      ctx.beginPath(); ctx.ellipse(w.x, w.y - 32, 10, 3, 0, 0, Math.PI*2); ctx.fill();
       ctx.fillStyle = info.color;
-      ctx.font = '20px sans-serif';
+      ctx.font = '18px sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(info.icon, it.x, it.y);
+      ctx.fillText(info.icon, w.x, w.y - 36 + bob);
       ctx.textBaseline = 'alphabetic';
     }
-  },
 
-  drawWorkers() {
-    for (const w of this.workers) {
-      if (!w.active) continue;
-
-      // Shadow
-      ctx.fillStyle = 'rgba(0,0,0,0.3)';
-      ctx.beginPath(); ctx.ellipse(w.x, w.y+14, 14, 6, 0, 0, Math.PI*2); ctx.fill();
-
-      // Body
-      ctx.fillStyle = w.color;
-      ctx.shadowBlur = 15;
-      ctx.shadowColor = w.color;
-      ctx.beginPath(); ctx.arc(w.x, w.y, 14, 0, Math.PI*2); ctx.fill();
-      ctx.shadowBlur = 0;
-
-      // Hardhat
-      ctx.fillStyle = w.color;
-      ctx.beginPath();
-      ctx.ellipse(w.x, w.y-10, 12, 7, 0, Math.PI, 0);
-      ctx.fill();
-      ctx.fillRect(w.x-12, w.y-10, 24, 4);
-
-      // Direction indicator
-      const dirMap = { up:[0,-1], down:[0,1], left:[-1,0], right:[1,0] };
-      const d = dirMap[w.facing] || [0,1];
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.beginPath(); ctx.arc(w.x + d[0]*6, w.y + d[1]*6, 4, 0, Math.PI*2); ctx.fill();
-
-      // Carried item
-      if (w.item) {
-        const info = ITEMS[w.item];
-        ctx.fillStyle = '#fff';
-        ctx.font = '18px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(info.icon, w.x, w.y - 28);
-      }
-
-      // Interaction progress bar
-      if (w.interacting && w.interactMax > 0) {
-        const pct = w.interactTimer / w.interactMax;
-        const bw = 32; const bh = 5;
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.fillRect(w.x - bw/2, w.y + 20, bw, bh);
-        ctx.fillStyle = '#00e676';
-        ctx.fillRect(w.x - bw/2, w.y + 20, bw * pct, bh);
-      }
-
-      // Name tag
+    // Interaction progress bar (above head)
+    if (w.interacting && w.interactMax > 0) {
+      const pct = w.interactTimer / w.interactMax;
+      const bw = 36; const bh = 5;
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.beginPath(); ctx.roundRect(w.x-22, w.y+24, 44, 16, 4); ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 9px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(w.name, w.x, w.y+35);
+      ctx.beginPath(); ctx.roundRect(w.x - bw/2, w.y - 24, bw, bh, 2); ctx.fill();
+      ctx.fillStyle = '#00e676';
+      ctx.beginPath(); ctx.roundRect(w.x - bw/2, w.y - 24, bw * pct, bh, 2); ctx.fill();
     }
+
+    // Name tag
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.beginPath(); ctx.roundRect(w.x - 24, w.y + 22, 48, 16, 4); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(w.name, w.x, w.y + 33);
   },
 
   drawParticles() {
