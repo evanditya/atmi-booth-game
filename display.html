@@ -795,72 +795,34 @@ const Game = {
   },
 
   drawStations() {
+    const d = 12; // 3D depth
     for (const s of STATIONS) {
-      const h = 14; // 3D height
+      // Shadow under station
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillRect(s.x + 6, s.y + s.h + 6, s.w, s.h * 0.3);
 
-      // Shadow
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      ctx.fillRect(s.x + 4, s.y + h + 4, s.w, s.h);
+      if (s.id === 'cnc') this.drawCNC(s, d);
+      else if (s.id === 'assembly') this.drawRobotStation(s, d);
+      else if (s.id === 'program') this.drawProgramStation(s, d);
+      else if (s.id === 'qc') this.drawQCStation(s, d);
+      else if (s.id === 'raw') this.drawRawRack(s, d);
+      else if (s.id === 'trash') this.drawTrashBin(s, d);
+      else if (s.id === 'breaker') this.drawBreakerPanel(s, d);
 
-      // Side faces (3D depth)
-      ctx.fillStyle = s.color + '40';
-      ctx.beginPath();
-      ctx.moveTo(s.x, s.y + s.h);
-      ctx.lineTo(s.x + 4, s.y + s.h + h);
-      ctx.lineTo(s.x + s.w + 4, s.y + s.h + h);
-      ctx.lineTo(s.x + s.w, s.y + s.h);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.fillStyle = s.color + '25';
-      ctx.beginPath();
-      ctx.moveTo(s.x + s.w, s.y);
-      ctx.lineTo(s.x + s.w + 4, s.y + h);
-      ctx.lineTo(s.x + s.w + 4, s.y + s.h + h);
-      ctx.lineTo(s.x + s.w, s.y + s.h);
-      ctx.closePath();
-      ctx.fill();
-
-      // Top face
-      ctx.fillStyle = s.color + '18';
-      ctx.fillRect(s.x, s.y, s.w, s.h);
-      ctx.strokeStyle = s.color + '60';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(s.x, s.y, s.w, s.h);
-
-      // Top highlight line
-      ctx.strokeStyle = s.color + '35';
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(s.x, s.y + s.h); ctx.lineTo(s.x + s.w, s.y + s.h); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(s.x + s.w, s.y); ctx.lineTo(s.x + s.w, s.y + s.h); ctx.stroke();
-
-      // Icon & name
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 15px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(s.icon + ' ' + s.name, s.x + s.w/2, s.y + 26);
-      ctx.font = '10px sans-serif';
-      ctx.fillStyle = s.color;
-      ctx.fillText(s.prog, s.x + s.w/2, s.y + 40);
-
-      // Power outage dim
+      // Power outage dim overlay
       if (this.powerOutage && ['cnc','assembly','program','qc'].includes(s.id)) {
-        ctx.fillStyle = 'rgba(0,0,0,0.55)';
-        ctx.fillRect(s.x, s.y, s.w, s.h);
-        ctx.fillStyle = 'rgba(0,0,0,0.4)';
-        ctx.beginPath();
-        ctx.moveTo(s.x, s.y + s.h); ctx.lineTo(s.x + 4, s.y + s.h + h);
-        ctx.lineTo(s.x + s.w + 4, s.y + s.h + h); ctx.lineTo(s.x + s.w, s.y + s.h);
-        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(s.x - 10, s.y - 10, s.w + 30, s.h + 40);
       }
 
       // Overheat warning
       if (this.overheatStation === s.id) {
-        ctx.fillStyle = `rgba(255,82,82,${0.25 + Math.sin(performance.now()/200)*0.15})`;
-        ctx.fillRect(s.x, s.y, s.w, s.h);
+        ctx.fillStyle = `rgba(255,82,82,${0.3 + Math.sin(performance.now()/200)*0.2})`;
+        ctx.fillRect(s.x - 10, s.y - 10, s.w + 30, s.h + 40);
         ctx.fillStyle = '#ff5252';
-        ctx.font = 'bold 13px sans-serif';
-        ctx.fillText('🔥 OVERHEAT!', s.x+s.w/2, s.y+s.h/2+4);
+        ctx.font = 'bold 14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('🔥 OVERHEAT!', s.x + s.w/2, s.y + s.h/2);
       }
     }
 
@@ -868,19 +830,209 @@ const Game = {
     if (this.powerOutage) {
       const b = STATIONS.find(s=>s.id==='breaker');
       if (b) {
-        const h = 14;
-        ctx.shadowBlur = 25;
-        ctx.shadowColor = '#aa00ff';
-        ctx.fillStyle = `rgba(170,0,255,${0.25 + Math.sin(performance.now()/150)*0.15})`;
-        ctx.fillRect(b.x, b.y, b.w, b.h);
-        ctx.fillRect(b.x + b.w, b.y, 4, b.h);
-        ctx.fillRect(b.x, b.y + b.h, b.w + 4, h);
+        ctx.shadowBlur = 20; ctx.shadowColor = '#aa00ff';
+        ctx.fillStyle = `rgba(170,0,255,${0.3 + Math.sin(performance.now()/150)*0.2})`;
+        ctx.beginPath(); ctx.arc(b.x + b.w/2, b.y + b.h/2, 45, 0, Math.PI*2); ctx.fill();
         ctx.shadowBlur = 0;
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.fillText('TAP!', b.x+b.w/2, b.y+b.h/2+3);
       }
     }
+  },
+
+  // Helper: draw 3D box (top + side faces)
+  draw3DBox(x, y, w, h, d, color, border=true) {
+    // Top face
+    ctx.fillStyle = color + '25';
+    ctx.fillRect(x, y, w, h);
+    if (border) {
+      ctx.strokeStyle = color + '55';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x, y, w, h);
+    }
+    // Front face
+    ctx.fillStyle = color + '15';
+    ctx.beginPath();
+    ctx.moveTo(x, y + h); ctx.lineTo(x + d*0.6, y + h + d);
+    ctx.lineTo(x + w + d*0.6, y + h + d); ctx.lineTo(x + w, y + h);
+    ctx.closePath(); ctx.fill();
+    if (border) { ctx.strokeStyle = color + '35'; ctx.stroke(); }
+    // Right face
+    ctx.fillStyle = color + '10';
+    ctx.beginPath();
+    ctx.moveTo(x + w, y); ctx.lineTo(x + w + d*0.6, y + d);
+    ctx.lineTo(x + w + d*0.6, y + h + d); ctx.lineTo(x + w, y + h);
+    ctx.closePath(); ctx.fill();
+    if (border) { ctx.strokeStyle = color + '25'; ctx.stroke(); }
+  },
+
+  drawCNC(s, d) {
+    const c = s.color; // #00c853
+    // Machine base platform
+    this.draw3DBox(s.x, s.y + s.h - 30, s.w, 30, d, '#333', false);
+    // Main machine body (left side)
+    this.draw3DBox(s.x + 10, s.y + 20, 100, s.h - 50, d + 4, '#444');
+    // Control panel screen
+    ctx.fillStyle = '#00e676';
+    ctx.fillRect(s.x + 18, s.y + 35, 30, 22);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(s.x + 20, s.y + 37, 26, 18);
+    ctx.fillStyle = '#00e676';
+    ctx.font = '8px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('CNC', s.x + 33, s.y + 50);
+    // Spindle head
+    this.draw3DBox(s.x + 70, s.y + 10, 30, 25, d + 6, '#555');
+    // Cutting bed / work area (right side)
+    this.draw3DBox(s.x + 120, s.y + 60, 80, s.h - 90, d, c);
+    // Workpiece on bed
+    ctx.fillStyle = '#666';
+    ctx.fillRect(s.x + 135, s.y + 55, 50, 8);
+    ctx.fillStyle = '#888';
+    ctx.fillRect(s.x + 135, s.y + 53, 50, 4);
+    // Label
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🔧 CNC CUTTING', s.x + s.w/2, s.y + s.h + d + 14);
+  },
+
+  drawRobotStation(s, d) {
+    const c = s.color; // #448aff
+    // Base platform
+    this.draw3DBox(s.x, s.y + s.h - 20, s.w, 20, d, '#333', false);
+    // Robot base cylinder
+    ctx.fillStyle = '#444';
+    ctx.beginPath(); ctx.ellipse(s.x + 50, s.y + s.h - 20, 28, 10, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#555';
+    ctx.beginPath(); ctx.ellipse(s.x + 50, s.y + s.h - 28, 22, 8, 0, 0, Math.PI*2); ctx.fill();
+    // Arm segment 1 (vertical)
+    ctx.fillStyle = c + '90';
+    ctx.fillRect(s.x + 44, s.y + 40, 12, s.h - 68);
+    // Arm segment 2 (horizontal)
+    ctx.fillStyle = c + '70';
+    ctx.fillRect(s.x + 50, s.y + 45, 90, 10);
+    // Arm segment 3 (diagonal down)
+    ctx.fillStyle = c + '80';
+    ctx.beginPath();
+    ctx.moveTo(s.x + 140, s.y + 48); ctx.lineTo(s.x + 155, s.y + 48);
+    ctx.lineTo(s.x + 150, s.y + 75); ctx.lineTo(s.x + 135, s.y + 75);
+    ctx.closePath(); ctx.fill();
+    // Gripper claw
+    ctx.fillStyle = '#ccc';
+    ctx.fillRect(s.x + 142, s.y + 75, 6, 12);
+    ctx.fillRect(s.x + 138, s.y + 85, 14, 4);
+    // Label
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🤖 ROBOT ASSEMBLY', s.x + s.w/2, s.y + s.h + d + 14);
+  },
+
+  drawProgramStation(s, d) {
+    const c = s.color; // #00b0ff
+    // Desk
+    this.draw3DBox(s.x + 10, s.y + 70, s.w - 20, 15, d + 2, '#444');
+    // Desk legs
+    ctx.fillStyle = '#333';
+    ctx.fillRect(s.x + 18, s.y + 85, 6, s.h - 85);
+    ctx.fillRect(s.x + s.w - 24, s.y + 85, 6, s.h - 85);
+    // Monitor 1 (left)
+    this.draw3DBox(s.x + 25, s.y + 25, 55, 40, d + 2, '#222');
+    ctx.fillStyle = c + '60';
+    ctx.fillRect(s.x + 28, s.y + 28, 49, 34);
+    ctx.fillStyle = '#fff';
+    ctx.font = '7px monospace';
+    ctx.fillText('CODE', s.x + 52, s.y + 48);
+    // Monitor 2 (right)
+    this.draw3DBox(s.x + 110, s.y + 30, 50, 35, d + 2, '#222');
+    ctx.fillStyle = c + '40';
+    ctx.fillRect(s.x + 113, s.y + 33, 44, 29);
+    // Keyboard
+    ctx.fillStyle = '#333';
+    ctx.fillRect(s.x + 40, s.y + 72, s.w - 80, 6);
+    ctx.fillStyle = '#555';
+    for (let i = 0; i < 8; i++) ctx.fillRect(s.x + 42 + i*8, s.y + 73, 6, 4);
+    // Label
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('💻 PROGRAMMING', s.x + s.w/2, s.y + s.h + d + 14);
+  },
+
+  drawQCStation(s, d) {
+    const c = s.color; // #ffb300
+    // Conveyor table
+    this.draw3DBox(s.x + 5, s.y + 55, s.w - 10, 18, d + 2, '#555');
+    // Conveyor belt lines
+    ctx.fillStyle = '#777';
+    ctx.fillRect(s.x + 10, s.y + 58, s.w - 20, 3);
+    ctx.fillStyle = '#999';
+    for (let i = 0; i < 6; i++) ctx.fillRect(s.x + 15 + i*28, s.y + 56, 4, 14);
+    // Box stack on left
+    this.draw3DBox(s.x + 15, s.y + 25, 35, 30, d, c);
+    this.draw3DBox(s.x + 20, s.y + 15, 30, 22, d + 2, c);
+    // Stamp / check circle
+    ctx.fillStyle = c + '40';
+    ctx.beginPath(); ctx.arc(s.x + s.w - 45, s.y + 50, 18, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = c; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(s.x + s.w - 45, s.y + 50, 18, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = c;
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText('✓', s.x + s.w - 45, s.y + 55);
+    // Label
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('📦 QC & SHIPPING', s.x + s.w/2, s.y + s.h + d + 14);
+  },
+
+  drawRawRack(s, d) {
+    const c = s.color; // #8d6e63
+    // Pallet base
+    this.draw3DBox(s.x + 5, s.y + 35, s.w - 10, 12, d, '#5d4037');
+    // Material blocks
+    this.draw3DBox(s.x + 15, s.y + 10, 30, 25, d + 3, '#9e9e9e');
+    this.draw3DBox(s.x + 55, s.y + 5, 25, 30, d + 3, '#757575');
+    this.draw3DBox(s.x + 90, s.y + 15, 28, 20, d + 3, '#bdbdbd');
+    // Label
+    ctx.fillStyle = '#aaa';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('⛏️ RAW MATERIALS', s.x + s.w/2, s.y + 55 + d);
+  },
+
+  drawTrashBin(s, d) {
+    const c = s.color; // #ff5252
+    // Bin body
+    this.draw3DBox(s.x + 35, s.y + 10, 50, 40, d + 4, c);
+    // Bin opening (darker top)
+    ctx.fillStyle = '#b71c1c';
+    ctx.fillRect(s.x + 38, s.y + 8, 44, 6);
+    // Trash symbol
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🗑️', s.x + s.w/2, s.y + 38);
+  },
+
+  drawBreakerPanel(s, d) {
+    const c = s.color; // #aa00ff
+    // Panel box
+    this.draw3DBox(s.x + 5, s.y + 5, s.w - 10, s.h - 10, d + 3, '#333');
+    // Panel door
+    ctx.fillStyle = '#444';
+    ctx.fillRect(s.x + 10, s.y + 10, s.w - 20, s.h - 20);
+    ctx.strokeStyle = c + '60'; ctx.lineWidth = 1;
+    ctx.strokeRect(s.x + 10, s.y + 10, s.w - 20, s.h - 20);
+    // Switches / levers
+    ctx.fillStyle = c;
+    ctx.fillRect(s.x + 18, s.y + 20, 8, 20);
+    ctx.fillRect(s.x + 32, s.y + 25, 8, 15);
+    ctx.fillRect(s.x + 46, s.y + 18, 8, 22);
+    // Lightning bolt
+    ctx.fillStyle = '#ffeb3b';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('⚡', s.x + s.w/2 + 15, s.y + 50);
   },
 
   drawOneItem(it) {
